@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise RAG Demo</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>Enterprise RAG Demo</h1>
+            <p class="subtitle">Retrieval-Augmented Generation powered by Claude &amp; ChromaDB</p>
+        </div>
+        <button id="theme-toggle" aria-label="Toggle theme">&#9789;</button>
+    </header>
+
+    <main>
+        <!-- Upload Section -->
+        <section class="card" id="upload-section">
+            <h2>1. Upload Documents</h2>
+            <p>Upload PDF, DOCX, TXT, or Markdown files to build your knowledge base.</p>
+            <div class="upload-area" id="drop-zone">
+                <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.md,.csv">
+                <p>Drag & drop files here or <strong>click to browse</strong></p>
+                <p class="hint">Supported: PDF, DOCX, TXT, Markdown, CSV</p>
+            </div>
+            <div id="upload-status"></div>
+        </section>
+
+        <!-- Documents Section -->
+        <section class="card" id="documents-section">
+            <div class="section-header">
+                <h2>2. Knowledge Base</h2>
+                <button id="refresh-docs" class="btn btn-sm">Refresh</button>
+            </div>
+            <div id="documents-list">
+                <p class="empty-state">No documents uploaded yet.</p>
+            </div>
+        </section>
+
+        <!-- Query Section -->
+        <section class="card" id="query-section">
+            <h2>3. Ask a Question</h2>
+            <form id="query-form">
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="query-input"
+                        placeholder="Ask a question about your documents..."
+                        required
+                        maxlength="2000"
+                    >
+                    <button type="submit" class="btn btn-primary" id="query-btn">Ask</button>
+                </div>
+                <div class="query-options">
+                    <label>
+                        Top K:
+                        <input type="number" id="top-k" value="5" min="1" max="20">
+                    </label>
+                    <label>
+                        Score threshold:
+                        <input type="number" id="score-threshold" value="0.3" min="0" max="1" step="0.05">
+                    </label>
+                </div>
+            </form>
+        </section>
+
+        <!-- Answer Section -->
+        <section class="card" id="answer-section" hidden>
+            <h2>Answer</h2>
+            <div id="answer-content"></div>
+            <div id="answer-meta"></div>
+            <details id="sources-details">
+                <summary>Sources (<span id="source-count">0</span>)</summary>
+                <div id="sources-list"></div>
+            </details>
+        </section>
+    </main>
+
+    <footer>
+        <p>Enterprise RAG Demo v1.0.0 &mdash;
+            <a href="/docs" target="_blank">API Docs</a> |
+            <a href="/api/v1/health" target="_blank">Health</a> |
+            <a href="/api/v1/metrics" target="_blank">Metrics</a>
+        </p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

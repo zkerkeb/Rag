@@ -1,0 +1,52 @@
+# Enterprise RAG Configuration
+# Override with environment variables prefixed with RAG_
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  reload: true
+
+llm:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+  temperature: 0.1
+
+embeddings:
+  model: "all-MiniLM-L6-v2"
+  dimension: 384
+
+vector_store:
+  provider: "chromadb"
+  persist_directory: "./data/chroma_db"
+  collection_name: "enterprise_docs"
+
+chunking:
+  strategy: "recursive"
+  chunk_size: 512
+  chunk_overlap: 50
+  separators:
+    - "\n\n"
+    - "\n"
+    - ". "
+    - " "
+
+retrieval:
+  top_k: 5
+  score_threshold: 0.3
+  rerank: false
+
+auth:
+  enabled: false
+  secret_key: "change-me-in-production"
+  algorithm: "HS256"
+  access_token_expire_minutes: 60
+
+logging:
+  level: "INFO"
+  format: "json"
+
+monitoring:
+  prometheus_enabled: true
+  metrics_path: "/metrics"

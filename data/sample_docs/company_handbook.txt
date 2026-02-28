@@ -1,0 +1,131 @@
+Acme Corp Employee Handbook
+============================
+
+Chapter 1: Welcome to Acme Corp
+--------------------------------
+
+Welcome to Acme Corp! We are a global technology company dedicated to building innovative solutions
+that empower businesses worldwide. Founded in 2010, Acme Corp has grown from a small startup to
+a Fortune 500 company with over 15,000 employees across 30 countries.
+
+Our mission is to "Make complex simple" by providing enterprise-grade software that is both
+powerful and easy to use. We believe that technology should amplify human potential, not replace it.
+
+Chapter 2: Company Values
+--------------------------
+
+Our five core values guide everything we do:
+
+1. Innovation First: We encourage bold thinking and experimentation. Every employee gets 20%
+   time to work on passion projects. Our Innovation Lab has produced 12 patents in the last year.
+
+2. Customer Obsession: We start with the customer and work backwards. Our Net Promoter Score
+   of 78 reflects our commitment to customer satisfaction.
+
+3. Radical Transparency: We share company financials, strategy, and decisions openly with all
+   employees. Monthly all-hands meetings keep everyone aligned.
+
+4. Diversity & Inclusion: We believe diverse teams build better products. Our D&I initiatives
+   have increased underrepresented groups in leadership roles by 40% since 2020.
+
+5. Sustainable Growth: We prioritize long-term value over short-term gains. Our ESG rating
+   of AA reflects our commitment to environmental and social responsibility.
+
+Chapter 3: Benefits Overview
+-----------------------------
+
+Health & Wellness:
+- Comprehensive medical, dental, and vision insurance for employees and dependents
+- Mental health support: 12 free therapy sessions per year through our EAP
+- Gym membership reimbursement up to $100/month
+- Annual wellness stipend of $500
+
+Time Off:
+- 25 days of paid time off (PTO) per year for all employees
+- 12 company holidays
+- 8 weeks of paid parental leave for all new parents
+- 2 weeks of bereavement leave
+- Unlimited sick days (we trust our employees)
+
+Financial:
+- 401(k) with 6% company match, vested immediately
+- Employee Stock Purchase Plan (ESPP) at 15% discount
+- Annual bonus target of 10-20% based on company and individual performance
+- $5,000 annual education and professional development budget
+
+Remote Work:
+- Flexible hybrid policy: minimum 2 days in office per week
+- $1,500 home office setup stipend for new employees
+- Monthly internet reimbursement of $75
+
+Chapter 4: Engineering Practices
+---------------------------------
+
+Our engineering team follows modern best practices to ensure high-quality software delivery:
+
+Development Process:
+- We use a modified Scrum methodology with 2-week sprints
+- All code must pass code review by at least 2 peers before merging
+- We maintain a minimum of 80% code coverage across all projects
+- Continuous Integration/Continuous Deployment (CI/CD) pipelines run on every commit
+
+Technology Stack:
+- Backend: Python (FastAPI, Django), Go, Rust
+- Frontend: React, TypeScript, Next.js
+- Infrastructure: AWS, Kubernetes, Terraform
+- Data: PostgreSQL, Redis, Elasticsearch, Apache Kafka
+- AI/ML: PyTorch, Claude API, custom ML pipelines
+
+Security:
+- All applications must pass OWASP Top 10 security scans
+- Quarterly penetration testing by third-party firms
+- SOC 2 Type II certified
+- GDPR and CCPA compliant
+- Bug bounty program with payouts up to $25,000
+
+Chapter 5: Career Development
+-------------------------------
+
+We invest heavily in our employees' growth:
+
+Career Levels:
+- Individual Contributors: IC1 (Junior) through IC7 (Distinguished Engineer)
+- Management: M1 (Team Lead) through M5 (VP of Engineering)
+- All levels have clear, documented expectations and compensation bands
+
+Performance Reviews:
+- Semi-annual performance reviews with calibration across teams
+- 360-degree feedback from peers, direct reports, and managers
+- Promotion cycles in March and September
+
+Learning & Development:
+- $5,000 annual education budget per employee
+- Access to O'Reilly Learning, Coursera, and Udemy Business
+- Internal tech talks every Thursday (recorded for remote employees)
+- Annual company-wide hackathon with prizes up to $10,000
+- Mentorship program pairing senior and junior engineers
+
+Chapter 6: Incident Response
+------------------------------
+
+When production incidents occur, we follow a structured response process:
+
+Severity Levels:
+- SEV1 (Critical): Complete service outage affecting all customers. Response time: 15 minutes.
+- SEV2 (Major): Significant degradation affecting >25% of customers. Response time: 30 minutes.
+- SEV3 (Minor): Limited impact affecting <25% of customers. Response time: 2 hours.
+- SEV4 (Low): Cosmetic or minor issues. Response time: next business day.
+
+Incident Response Process:
+1. Detection: Automated monitoring alerts or customer reports trigger incident
+2. Triage: On-call engineer assesses severity and pages appropriate team
+3. Response: Incident commander coordinates resolution efforts
+4. Communication: Status page updated, stakeholders notified
+5. Resolution: Fix deployed and verified
+6. Post-mortem: Blameless review within 48 hours, action items tracked to completion
+
+On-Call Policy:
+- Engineers rotate on-call weekly within their team
+- On-call engineers receive $500/week additional compensation
+- Maximum response time for SEV1 pages: 15 minutes
+- Escalation to management if incident not acknowledged within 30 minutes

@@ -1,0 +1,241 @@
+Acme Platform API Documentation v3.2
+======================================
+
+Overview
+---------
+
+The Acme Platform REST API allows programmatic access to all platform features. The API follows
+RESTful conventions with JSON request/response bodies.
+
+Base URL: https://api.acmecorp.example.com/v3
+
+Authentication: All API requests require a Bearer token in the Authorization header.
+Obtain tokens via the /auth/token endpoint or configure API keys in the Admin console.
+
+Rate Limiting: See the FAQ for plan-specific rate limits. Rate limit info is returned
+in X-RateLimit-* response headers.
+
+Endpoints
+----------
+
+### Authentication
+
+POST /auth/token
+  Request:
+    {
+      "grant_type": "client_credentials",
+      "client_id": "your_client_id",
+      "client_secret": "your_client_secret"
+    }
+  Response:
+    {
+      "access_token": "eyJhbGciOiJSUzI1NiIs...",
+      "token_type": "Bearer",
+      "expires_in": 3600
+    }
+
+### Data Sources
+
+GET /sources
+  List all configured data sources.
+  Query Parameters:
+    - page (int): Page number, default 1
+    - per_page (int): Items per page, default 20, max 100
+    - type (string): Filter by source type (database, saas, file, streaming)
+    - status (string): Filter by status (active, inactive, error)
+  Response:
+    {
+      "data": [
+        {
+          "id": "src_abc123",
+          "name": "Production PostgreSQL",
+          "type": "database",
+          "connector": "postgresql",
+          "status": "active",
+          "last_sync": "2025-01-15T10:30:00Z",
+          "row_count": 1250000
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "per_page": 20,
+        "total": 45
+      }
+    }
+
+POST /sources
+  Create a new data source connection.
+  Request:
+    {
+      "name": "My PostgreSQL Database",
+      "connector": "postgresql",
+      "config": {
+        "host": "db.example.com",
+        "port": 5432,
+        "database": "mydb",
+        "username": "readonly_user",
+        "password": "encrypted_via_kms",
+        "ssl": true
+      },
+      "sync_schedule": "0 */6 * * *"
+    }
+
+DELETE /sources/{source_id}
+  Remove a data source and its associated metadata.
+  Note: This does not delete the synchronized data. Use DELETE /datasets/{id} for that.
+
+### Datasets
+
+GET /datasets
+  List all datasets in the platform.
+  Query Parameters:
+    - page, per_page: Pagination
+    - source_id: Filter by source
+    - tag: Filter by tag
+  Response includes dataset schema, row count, last updated timestamp.
+
+GET /datasets/{dataset_id}/query
+  Execute a SQL query against a dataset.
+  Request:
+    {
+      "sql": "SELECT department, AVG(salary) as avg_salary FROM employees GROUP BY department",
+      "limit": 1000,
+      "timeout_seconds": 30
+    }
+  Response:
+    {
+      "columns": ["department", "avg_salary"],
+      "rows": [
+        ["Engineering", 145000],
+        ["Marketing", 120000],
+        ["Sales", 115000]
+      ],
+      "row_count": 3,
+      "execution_time_ms": 245
+    }
+
+POST /datasets/{dataset_id}/export
+  Export dataset to various formats.
+  Request:
+    {
+      "format": "parquet",  // csv, json, parquet, excel
+      "compression": "snappy",
+      "filters": {
+        "date_range": {"start": "2025-01-01", "end": "2025-12-31"}
+      }
+    }
+  Response:
+    {
+      "export_id": "exp_xyz789",
+      "status": "processing",
+      "download_url": null,  // Available when status is "completed"
+      "estimated_size_bytes": 52428800
+    }
+
+### Pipelines
+
+GET /pipelines
+  List data pipelines.
+
+POST /pipelines
+  Create a new data pipeline.
+  Request:
+    {
+      "name": "Daily Sales ETL",
+      "source_id": "src_abc123",
+      "destination_id": "dst_def456",
+      "transforms": [
+        {"type": "filter", "config": {"column": "status", "operator": "eq", "value": "completed"}},
+        {"type": "rename", "config": {"mapping": {"cust_id": "customer_id"}}},
+        {"type": "aggregate", "config": {"group_by": ["region"], "metrics": [{"column": "revenue", "function": "sum"}]}}
+      ],
+      "schedule": "0 2 * * *",
+      "retry_policy": {
+        "max_retries": 3,
+        "backoff_multiplier": 2
+      }
+    }
+
+POST /pipelines/{pipeline_id}/trigger
+  Manually trigger a pipeline run.
+
+GET /pipelines/{pipeline_id}/runs
+  List pipeline run history with status, duration, and row counts.
+
+### AI Analytics
+
+POST /ai/query
+  Ask a natural language question about your data.
+  Request:
+    {
+      "question": "What were the top 5 products by revenue last quarter?",
+      "dataset_ids": ["ds_001", "ds_002"],
+      "include_chart": true
+    }
+  Response:
+    {
+      "answer": "Based on Q4 2024 data, the top 5 products by revenue were...",
+      "sql_generated": "SELECT product_name, SUM(revenue)...",
+      "chart": {
+        "type": "bar",
+        "data": {...}
+      },
+      "confidence": 0.92,
+      "sources": ["ds_001"]
+    }
+
+POST /ai/anomalies
+  Detect anomalies in a dataset.
+  Request:
+    {
+      "dataset_id": "ds_001",
+      "columns": ["revenue", "order_count"],
+      "lookback_days": 90,
+      "sensitivity": "medium"
+    }
+
+### Webhooks
+
+POST /webhooks
+  Register a webhook endpoint.
+  Request:
+    {
+      "url": "https://your-server.example.com/webhook",
+      "events": ["pipeline.completed", "pipeline.failed", "anomaly.detected"],
+      "secret": "your_webhook_secret"
+    }
+
+GET /webhooks/{webhook_id}/deliveries
+  View webhook delivery history and retry failed deliveries.
+
+Error Codes
+-------------
+
+All errors follow this format:
+  {
+    "error": {
+      "code": "RESOURCE_NOT_FOUND",
+      "message": "Dataset with ID ds_999 was not found",
+      "request_id": "req_abc123xyz"
+    }
+  }
+
+Common error codes:
+  - 400 INVALID_REQUEST: Malformed request body or parameters
+  - 401 UNAUTHORIZED: Missing or invalid authentication token
+  - 403 FORBIDDEN: Insufficient permissions for the requested resource
+  - 404 RESOURCE_NOT_FOUND: The requested resource does not exist
+  - 409 CONFLICT: Resource already exists or version conflict
+  - 429 RATE_LIMITED: Too many requests, retry after X seconds
+  - 500 INTERNAL_ERROR: Unexpected server error, contact support with request_id
+
+SDK Support
+------------
+
+Official SDKs are available for:
+  - Python: pip install acme-platform-sdk
+  - JavaScript/TypeScript: npm install @acme/platform-sdk
+  - Go: go get github.com/acmecorp/platform-sdk-go
+  - Java: Maven artifact com.acmecorp:platform-sdk
+
+All SDKs include automatic retry, pagination helpers, and type-safe request/response models.

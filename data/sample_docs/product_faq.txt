@@ -1,0 +1,129 @@
+Acme Platform - Frequently Asked Questions
+============================================
+
+General Questions
+------------------
+
+Q: What is the Acme Platform?
+A: The Acme Platform is an enterprise data integration and analytics solution that helps
+organizations connect, transform, and analyze data from hundreds of sources. It provides
+a unified view of your business data with powerful AI-driven insights.
+
+Q: What pricing plans are available?
+A: We offer three pricing tiers:
+   - Starter: $99/month for up to 5 users, 10 data sources, 1M rows/month
+   - Professional: $499/month for up to 25 users, 50 data sources, 10M rows/month
+   - Enterprise: Custom pricing for unlimited users, sources, and data volume
+   All plans include a 14-day free trial with full feature access.
+
+Q: What data sources does the platform support?
+A: We currently support 250+ data connectors including:
+   - Databases: PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, DynamoDB
+   - Cloud Storage: AWS S3, Google Cloud Storage, Azure Blob Storage
+   - SaaS Applications: Salesforce, HubSpot, Stripe, Shopify, Zendesk
+   - File Formats: CSV, JSON, Parquet, Excel, XML
+   - APIs: REST and GraphQL with custom connector builder
+   - Streaming: Apache Kafka, Amazon Kinesis, Google Pub/Sub
+
+Q: Is the Acme Platform SOC 2 compliant?
+A: Yes, the Acme Platform is SOC 2 Type II certified. We undergo annual audits by
+an independent third-party firm. We are also GDPR compliant, CCPA compliant, and
+HIPAA eligible for healthcare customers.
+
+Technical Questions
+--------------------
+
+Q: What are the system requirements?
+A: The Acme Platform is a fully cloud-hosted SaaS solution. You only need:
+   - A modern web browser (Chrome, Firefox, Safari, or Edge)
+   - Internet connection with minimum 5 Mbps bandwidth
+   - For the on-premise option: 8 CPU cores, 32GB RAM, 500GB SSD minimum
+
+Q: How does data encryption work?
+A: We implement multiple layers of encryption:
+   - Data in transit: TLS 1.3 encryption for all API and web traffic
+   - Data at rest: AES-256 encryption for all stored data
+   - Key management: AWS KMS with customer-managed key (CMK) option
+   - Field-level encryption available for sensitive data columns
+
+Q: What is the platform's uptime SLA?
+A: Our uptime commitments by plan:
+   - Starter: 99.5% monthly uptime SLA
+   - Professional: 99.9% monthly uptime SLA
+   - Enterprise: 99.99% monthly uptime SLA with custom SLAs available
+   We publish real-time status at status.acmecorp.example.com
+
+Q: How does the AI analytics feature work?
+A: Our AI analytics engine uses a combination of:
+   - Natural Language Processing (NLP) for query understanding
+   - Retrieval-Augmented Generation (RAG) for contextual analysis
+   - Anomaly detection using statistical and ML models
+   - Predictive forecasting with time-series analysis
+   Users can ask questions in plain English and receive charts, insights,
+   and recommended actions.
+
+Q: What API rate limits apply?
+A: API rate limits by plan:
+   - Starter: 100 requests/minute, 10,000 requests/day
+   - Professional: 1,000 requests/minute, 100,000 requests/day
+   - Enterprise: Custom rate limits, dedicated API infrastructure
+   Rate limit headers are included in all API responses.
+
+Integration Questions
+----------------------
+
+Q: How do I set up Single Sign-On (SSO)?
+A: We support SSO via SAML 2.0 and OpenID Connect (OIDC). To configure:
+   1. Navigate to Admin > Security > SSO Configuration
+   2. Select your identity provider (Okta, Azure AD, Google Workspace, etc.)
+   3. Enter your IdP metadata URL or upload the metadata XML
+   4. Map user attributes (email, name, groups)
+   5. Test the connection and enable for your organization
+   SSO is available on Professional and Enterprise plans.
+
+Q: Can I use the platform with my existing BI tools?
+A: Yes! We provide native integrations with:
+   - Tableau: Direct connector and TDS file export
+   - Power BI: Custom connector available in the Power BI marketplace
+   - Looker: LookML model generation from Acme datasets
+   - Grafana: Prometheus-compatible metrics endpoint
+   Additionally, our SQL endpoint allows any JDBC/ODBC-compatible tool to query data.
+
+Q: Does the platform support webhooks?
+A: Yes, we support webhooks for real-time event notifications:
+   - Data pipeline completion
+   - Anomaly detection alerts
+   - User activity events
+   - System health alerts
+   Configure webhooks at Admin > Integrations > Webhooks. Each webhook
+   includes HMAC-SHA256 signature verification for security.
+
+Support & Troubleshooting
+--------------------------
+
+Q: How do I contact support?
+A: Support channels by plan:
+   - Starter: Email support (support@acmecorp.example.com), 24-hour response time
+   - Professional: Email + chat support, 4-hour response time
+   - Enterprise: Email + chat + phone, 1-hour response time, dedicated account manager
+   All plans include access to our community forum and knowledge base.
+
+Q: What should I do if a data pipeline fails?
+A: Follow these steps:
+   1. Check the pipeline run logs at Data > Pipelines > [Pipeline Name] > Runs
+   2. Review the error message and affected stage
+   3. Common fixes:
+      - Source connection timeout: Verify network connectivity and credentials
+      - Schema mismatch: Check if source schema has changed
+      - Rate limiting: Reduce parallelism or add delays
+      - Out of memory: Reduce batch size or upgrade compute resources
+   4. If the issue persists, contact support with the Run ID
+
+Q: How do I migrate data from a competitor platform?
+A: We provide migration tools and dedicated support:
+   1. Export your data from the existing platform
+   2. Use our Migration Assistant (Admin > Tools > Migration)
+   3. Map fields and configure transformation rules
+   4. Run a test migration on a subset of data
+   5. Execute full migration with rollback capability
+   Enterprise customers receive dedicated migration engineering support.
