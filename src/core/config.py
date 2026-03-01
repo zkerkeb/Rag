@@ -32,11 +32,13 @@ class ServerSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
     provider: str = _yaml.get("llm", {}).get("provider", "anthropic")
     model: str = _yaml.get("llm", {}).get("model", "claude-sonnet-4-20250514")
     max_tokens: int = _yaml.get("llm", {}).get("max_tokens", 4096)
     temperature: float = _yaml.get("llm", {}).get("temperature", 0.1)
-    api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+    api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
 
 
 class EmbeddingSettings(BaseSettings):

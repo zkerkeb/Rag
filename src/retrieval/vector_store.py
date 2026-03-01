@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 import chromadb
 import structlog
@@ -19,7 +20,9 @@ class VectorStore:
 
     def __init__(self, collection_name: str | None = None) -> None:
         settings = get_settings().vector_store
-        self._client = chromadb.Client()  # in-memory for demo; use PersistentClient for prod
+        persist_dir = settings.persist_directory
+        Path(persist_dir).mkdir(parents=True, exist_ok=True)
+        self._client = chromadb.PersistentClient(path=persist_dir)
         name = collection_name or settings.collection_name
         self._collection = self._client.get_or_create_collection(
             name=name,

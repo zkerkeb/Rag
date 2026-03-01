@@ -4,31 +4,35 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from src.core.config import get_settings
 
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
 
 # Demo users (replace with database in production)
 _DEMO_USERS: dict[str, dict] = {
     "admin": {
-        "hashed_password": _pwd_ctx.hash("admin"),
+        "hashed_password": _hash_password("admin"),
         "role": "admin",
     },
     "viewer": {
-        "hashed_password": _pwd_ctx.hash("viewer"),
+        "hashed_password": _hash_password("viewer"),
         "role": "viewer",
     },
 }
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_ctx.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def authenticate_user(username: str, password: str) -> dict | None:

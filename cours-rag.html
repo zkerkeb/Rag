@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cours RAG - Retrieval-Augmented Generation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+    <style>
+        :root { --r-heading-color: #2d3748; --r-link-color: #3182ce; }
+        .reveal { font-size: 32px; }
+        .reveal h1 { font-size: 2.2em; color: #1a202c; }
+        .reveal h2 { font-size: 1.6em; color: #2d3748; }
+        .reveal h3 { font-size: 1.2em; color: #4a5568; }
+        .reveal pre { font-size: 0.48em; width: 95%; }
+        .reveal pre code { max-height: 500px; padding: 15px; }
+        .reveal .small-code pre { font-size: 0.42em; }
+        .reveal .tiny-code pre { font-size: 0.36em; }
+        .reveal ul { text-align: left; }
+        .reveal .highlight-blue { color: #3182ce; font-weight: bold; }
+        .reveal .highlight-green { color: #38a169; font-weight: bold; }
+        .reveal .highlight-red { color: #e53e3e; font-weight: bold; }
+        .reveal .highlight-purple { color: #805ad5; font-weight: bold; }
+        .reveal .box { background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 15px 0; }
+        .reveal .box-blue { background: #ebf8ff; border-color: #3182ce; }
+        .reveal .box-green { background: #f0fff4; border-color: #38a169; }
+        .reveal .box-red { background: #fff5f5; border-color: #e53e3e; }
+        .reveal .box-purple { background: #faf5ff; border-color: #805ad5; }
+        .reveal .columns { display: flex; gap: 30px; align-items: flex-start; }
+        .reveal .columns > * { flex: 1; }
+        .reveal .emoji { font-size: 1.5em; }
+        .reveal table { font-size: 0.7em; margin: 0 auto; }
+        .reveal table th { background: #edf2f7; }
+        .reveal table td, .reveal table th { padding: 8px 16px; border: 1px solid #e2e8f0; }
+        .reveal .slide-number { font-size: 14px; }
+        .section-title { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; }
+        .section-title h2 { color: white !important; }
+        .section-title h3 { color: rgba(255,255,255,0.85) !important; }
+        .section-title p { color: rgba(255,255,255,0.9) !important; }
+        svg text { font-family: system-ui, -apple-system, sans-serif; }
+    </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- SECTION 0 : INTRODUCTION                                      -->
+<!-- ============================================================ -->
+
+<section>
+    <h1>RAG</h1>
+    <h2>Retrieval-Augmented Generation</h2>
+    <p style="margin-top: 40px; color: #718096;">Construire un système d'IA qui répond à partir de vos documents</p>
+    <div style="margin-top: 60px; font-size: 0.6em; color: #a0aec0;">
+        <p>Utilisez les flèches pour naviguer &bull; <kbd>Esc</kbd> pour la vue d'ensemble</p>
+    </div>
+</section>
+
+<section>
+    <h2>Objectifs du cours</h2>
+    <ul>
+        <li class="fragment">Comprendre pourquoi les LLMs seuls ne suffisent pas</li>
+        <li class="fragment">Maîtriser le pipeline <strong>Parse &rarr; Chunk &rarr; Embed &rarr; Store</strong></li>
+        <li class="fragment">Savoir ce qu'est un <strong>embedding</strong> et une <strong>base vectorielle</strong></li>
+        <li class="fragment">Assembler un pipeline RAG complet avec <strong>Claude</strong></li>
+        <li class="fragment">Exposer le tout via une <strong>API REST</strong> avec FastAPI</li>
+    </ul>
+</section>
+
+<section>
+    <h2>Le projet fil rouge</h2>
+    <div class="small-code">
+    <pre><code class="language-bash" data-trim>
+Rag/
+├── src/
+│   ├── api/
+│   │   └── routes.py          # Endpoints REST
+│   ├── core/
+│   │   └── config.py          # Configuration YAML + env
+│   ├── ingestion/
+│   │   ├── parser.py          # Extraction de texte (PDF, DOCX, TXT)
+│   │   ├── chunker.py         # Découpage en chunks
+│   │   └── pipeline.py        # Orchestration du pipeline
+│   ├── retrieval/
+│   │   ├── embeddings.py      # Modèle d'embeddings
+│   │   ├── vector_store.py    # Base vectorielle ChromaDB
+│   │   └── rag_engine.py      # Moteur RAG (retrieve + generate)
+│   └── models/
+│       └── schemas.py         # Schémas Pydantic
+├── config/
+│   └── settings.yaml          # Paramètres de l'application
+└── templates/
+    └── index.html             # Interface web
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Pourquoi RAG ?</h2>
+    <div class="columns">
+        <div class="box box-red">
+            <h3>Problèmes des LLMs</h3>
+            <ul style="font-size: 0.8em;">
+                <li class="fragment"><strong>Hallucinations</strong> : inventent des réponses</li>
+                <li class="fragment"><strong>Données privées</strong> : n'ont pas accès à vos docs</li>
+                <li class="fragment"><strong>Fraîcheur</strong> : entraînés à une date fixe</li>
+            </ul>
+        </div>
+        <div class="box box-green fragment">
+            <h3>Solution : RAG</h3>
+            <p style="font-size: 0.8em;">Donner au LLM les <strong>bons documents</strong> au moment de la question, pour qu'il réponde à partir de <strong>faits réels</strong>.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 1 : LLMs ET LEURS LIMITES                             -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 1</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Les LLMs et leurs limites</h3>
+</section>
+
+<section>
+    <h2>Comment fonctionne un LLM ?</h2>
+    <div class="box">
+        <p><strong>Le principe :</strong> prédire le prochain mot (token) le plus probable</p>
+    </div>
+    <div class="fragment" style="margin-top: 20px;">
+        <p>"Le chat est sur le ___"</p>
+        <table>
+            <tr><th>Token</th><th>Probabilité</th></tr>
+            <tr><td>toit</td><td class="highlight-green">34%</td></tr>
+            <tr><td>canapé</td><td>22%</td></tr>
+            <tr><td>lit</td><td>18%</td></tr>
+            <tr><td>sol</td><td>12%</td></tr>
+        </table>
+    </div>
+    <p class="fragment" style="font-size: 0.7em; color: #718096; margin-top: 20px;">Un LLM ne "comprend" pas — il calcule des probabilités sur des séquences de tokens</p>
+</section>
+
+<section>
+    <h2>La tokenisation</h2>
+    <div class="box">
+        <p>"Bonjour, comment allez-vous ?"</p>
+        <p class="fragment">&darr;</p>
+        <p class="fragment">
+            <span style="background:#bee3f8;padding:4px 8px;border-radius:4px;margin:2px;">Bon</span>
+            <span style="background:#c6f6d5;padding:4px 8px;border-radius:4px;margin:2px;">jour</span>
+            <span style="background:#fed7d7;padding:4px 8px;border-radius:4px;margin:2px;">,</span>
+            <span style="background:#e9d8fd;padding:4px 8px;border-radius:4px;margin:2px;"> comment</span>
+            <span style="background:#fefcbf;padding:4px 8px;border-radius:4px;margin:2px;"> allez</span>
+            <span style="background:#bee3f8;padding:4px 8px;border-radius:4px;margin:2px;">-</span>
+            <span style="background:#c6f6d5;padding:4px 8px;border-radius:4px;margin:2px;">vous</span>
+            <span style="background:#fed7d7;padding:4px 8px;border-radius:4px;margin:2px;"> ?</span>
+        </p>
+    </div>
+    <p class="fragment" style="font-size: 0.7em;">Un mot &ne; un token. Les mots longs ou rares sont découpés en sous-mots.</p>
+</section>
+
+<section>
+    <h2>La fenêtre de contexte</h2>
+    <svg viewBox="0 0 700 250" style="width:90%;margin:20px auto;display:block;">
+        <rect x="10" y="30" width="680" height="60" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="2"/>
+        <text x="350" y="67" text-anchor="middle" font-size="16" fill="#2d3748">Fenêtre de contexte = System prompt + Conversation + Réponse</text>
+        <rect x="10" y="120" width="200" height="50" rx="8" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <text x="110" y="150" text-anchor="middle" font-size="14" fill="#553c9a">System prompt</text>
+        <rect x="220" y="120" width="300" height="50" rx="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <text x="370" y="150" text-anchor="middle" font-size="14" fill="#276749">Messages (user + assistant)</text>
+        <rect x="530" y="120" width="160" height="50" rx="8" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
+        <text x="610" y="150" text-anchor="middle" font-size="14" fill="#9b2c2c">Réponse</text>
+        <text x="350" y="210" text-anchor="middle" font-size="14" fill="#718096">Claude : 200K tokens (~150K mots) — mais plus on en met, plus c'est lent et coûteux</text>
+    </svg>
+    <p class="fragment" style="font-size: 0.75em;">On ne peut pas copier-coller 10 000 documents dans le prompt !</p>
+</section>
+
+<section>
+    <h2>Les hallucinations</h2>
+    <div class="box box-red">
+        <p><strong>Question :</strong> "Quelle est la politique de remboursement de notre entreprise ?"</p>
+        <p class="fragment" style="margin-top:15px;"><strong>LLM sans RAG :</strong> "Votre entreprise offre un remboursement sous 30 jours avec un formulaire RH-42..."</p>
+        <p class="fragment" style="color:#e53e3e;font-size:0.8em;">Totalement inventé ! Le LLM ne connaît pas vos documents internes.</p>
+    </div>
+    <div class="box box-green fragment">
+        <p><strong>LLM avec RAG :</strong> "D'après le document 'politique-rh.pdf', les remboursements se font sous 14 jours via le portail interne."</p>
+        <p style="color:#38a169;font-size:0.8em;">Basé sur un vrai document, avec une source citée.</p>
+    </div>
+</section>
+
+<section>
+    <h2>Données privées et fraîcheur</h2>
+    <div class="columns">
+        <div class="box">
+            <h3>Données privées</h3>
+            <ul style="font-size:0.75em;">
+                <li>Docs internes d'entreprise</li>
+                <li>Base de connaissances interne</li>
+                <li>Contrats, rapports...</li>
+            </ul>
+            <p class="fragment" style="font-size:0.7em;color:#e53e3e;">Le LLM n'a jamais vu ces documents !</p>
+        </div>
+        <div class="box">
+            <h3>Fraîcheur des données</h3>
+            <ul style="font-size:0.75em;">
+                <li>LLM entraîné à une date fixe</li>
+                <li>Ne connaît pas les news récentes</li>
+                <li>Docs mis à jour après l'entraînement</li>
+            </ul>
+            <p class="fragment" style="font-size:0.7em;color:#e53e3e;">Impossible de répondre sur l'actualité</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>L'idée du RAG</h2>
+    <svg viewBox="0 0 750 300" style="width:95%;margin:10px auto;display:block;">
+        <!-- Question -->
+        <rect x="10" y="20" width="160" height="60" rx="10" fill="#ebf8ff" stroke="#3182ce" stroke-width="2"/>
+        <text x="90" y="55" text-anchor="middle" font-size="15" fill="#2d3748">Question</text>
+        <!-- Arrow -->
+        <line x1="170" y1="50" x2="220" y2="50" stroke="#718096" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- Retrieve -->
+        <rect x="220" y="20" width="160" height="60" rx="10" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <text x="300" y="45" text-anchor="middle" font-size="14" font-weight="bold" fill="#276749">1. Retrieve</text>
+        <text x="300" y="65" text-anchor="middle" font-size="12" fill="#276749">Chercher les docs</text>
+        <!-- Arrow -->
+        <line x1="380" y1="50" x2="430" y2="50" stroke="#718096" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- Augment -->
+        <rect x="430" y="20" width="160" height="60" rx="10" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <text x="510" y="45" text-anchor="middle" font-size="14" font-weight="bold" fill="#553c9a">2. Augment</text>
+        <text x="510" y="65" text-anchor="middle" font-size="12" fill="#553c9a">Injecter dans le prompt</text>
+        <!-- Arrow -->
+        <line x1="590" y1="50" x2="640" y2="50" stroke="#718096" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- Generate -->
+        <rect x="640" y="20" width="100" height="60" rx="10" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
+        <text x="690" y="45" text-anchor="middle" font-size="14" font-weight="bold" fill="#9b2c2c">3. Generate</text>
+        <text x="690" y="65" text-anchor="middle" font-size="12" fill="#9b2c2c">Réponse</text>
+        <!-- DB -->
+        <rect x="220" y="130" width="160" height="50" rx="8" fill="#fefcbf" stroke="#d69e2e" stroke-width="2"/>
+        <text x="300" y="160" text-anchor="middle" font-size="13" fill="#744210">Base vectorielle</text>
+        <line x1="300" y1="80" x2="300" y2="130" stroke="#718096" stroke-width="2" stroke-dasharray="6,4"/>
+        <!-- Summary -->
+        <text x="375" y="230" text-anchor="middle" font-size="16" fill="#4a5568" font-weight="bold">R.A.G. = Retrieval-Augmented Generation</text>
+        <text x="375" y="260" text-anchor="middle" font-size="13" fill="#718096">"Chercher d'abord, répondre ensuite"</text>
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/></marker></defs>
+    </svg>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 2 : PIPELINE D'INGESTION                              -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 2</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Pipeline d'ingestion</h3>
+    <p style="color: rgba(255,255,255,0.7);">Parse &rarr; Chunk &rarr; Embed &rarr; Store</p>
+</section>
+
+<section>
+    <h2>Vue d'ensemble du pipeline</h2>
+    <svg viewBox="0 0 750 200" style="width:95%;margin:20px auto;display:block;">
+        <rect x="10" y="40" width="140" height="70" rx="10" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
+        <text x="80" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="#9b2c2c">1. Parse</text>
+        <text x="80" y="90" text-anchor="middle" font-size="11" fill="#9b2c2c">PDF, DOCX, TXT</text>
+        <text x="80" y="105" text-anchor="middle" font-size="11" fill="#9b2c2c">&rarr; texte brut</text>
+
+        <line x1="150" y1="75" x2="195" y2="75" stroke="#718096" stroke-width="2" marker-end="url(#arrow2)"/>
+
+        <rect x="195" y="40" width="140" height="70" rx="10" fill="#fefcbf" stroke="#d69e2e" stroke-width="2"/>
+        <text x="265" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="#744210">2. Chunk</text>
+        <text x="265" y="90" text-anchor="middle" font-size="11" fill="#744210">Découper en</text>
+        <text x="265" y="105" text-anchor="middle" font-size="11" fill="#744210">morceaux de 512 car.</text>
+
+        <line x1="335" y1="75" x2="385" y2="75" stroke="#718096" stroke-width="2" marker-end="url(#arrow2)"/>
+
+        <rect x="385" y="40" width="140" height="70" rx="10" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <text x="455" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="#276749">3. Embed</text>
+        <text x="455" y="90" text-anchor="middle" font-size="11" fill="#276749">Texte &rarr; vecteur</text>
+        <text x="455" y="105" text-anchor="middle" font-size="11" fill="#276749">384 dimensions</text>
+
+        <line x1="525" y1="75" x2="575" y2="75" stroke="#718096" stroke-width="2" marker-end="url(#arrow2)"/>
+
+        <rect x="575" y="40" width="140" height="70" rx="10" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <text x="645" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="#553c9a">4. Store</text>
+        <text x="645" y="90" text-anchor="middle" font-size="11" fill="#553c9a">Sauvegarder dans</text>
+        <text x="645" y="105" text-anchor="middle" font-size="11" fill="#553c9a">ChromaDB</text>
+
+        <text x="375" y="170" text-anchor="middle" font-size="13" fill="#718096">Ce pipeline s'exécute une fois par document uploadé</text>
+        <defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/></marker></defs>
+    </svg>
+</section>
+
+<section>
+    <h2>Le pipeline dans le code</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-6|8-9|11-12|14-16">
+# src/ingestion/pipeline.py — fonction ingest_document()
+
+def ingest_document(content, filename, content_type, collection=None):
+    document_id = uuid.uuid4().hex
+
+    try:
+        # 1. Parse : extraire le texte brut du fichier
+        text = parse_document(content, content_type, filename)
+
+        # 2. Chunk : découper en morceaux
+        chunks = chunk_text(text, document_id, metadata={...})
+
+        # 3. Embed & Store : vectoriser et sauvegarder
+        store = get_vector_store(collection=collection)
+        store.add_chunks(chunks)  # embed_texts() appelé à l'intérieur
+
+    except Exception as exc:
+        metadata.status = DocumentStatus.FAILED
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Parsing multi-format</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-7|9-19|21-27">
+# src/ingestion/parser.py
+SUPPORTED_TYPES: dict[str, str] = {
+    "text/plain": "text",
+    "text/markdown": "text",
+    "text/csv": "text",
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+}
+
+def parse_document(content: bytes, content_type: str, filename: str) -> str:
+    """Extract plain text from a document based on its content type."""
+    parser_key = SUPPORTED_TYPES.get(content_type)
+
+    if parser_key == "text":
+        return _parse_text(content)
+    elif parser_key == "pdf":
+        return _parse_pdf(content)
+    elif parser_key == "docx":
+        return _parse_docx(content)
+
+def _parse_pdf(content: bytes) -> str:
+    from pypdf import PdfReader
+    reader = PdfReader(io.BytesIO(content))
+    pages = []
+    for page in reader.pages:
+        text = page.extract_text()
+        if text:
+            pages.append(text)
+    return "\n\n".join(pages)
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Pourquoi découper en chunks ?</h2>
+    <div class="columns">
+        <div class="box">
+            <h3>Analogie</h3>
+            <p style="font-size:0.75em;">Imaginez chercher une info dans un livre de 500 pages...</p>
+            <ul style="font-size:0.7em;">
+                <li class="fragment">On ne lit pas tout le livre !</li>
+                <li class="fragment">On regarde l'<strong>index</strong></li>
+                <li class="fragment">On va à la <strong>bonne page</strong></li>
+            </ul>
+        </div>
+        <div class="box fragment">
+            <h3>Pour le RAG</h3>
+            <ul style="font-size:0.7em;">
+                <li>Un document = trop gros pour le prompt</li>
+                <li>Un chunk = un "paragraphe" pertinent</li>
+                <li>On cherche les <strong>chunks pertinents</strong>, pas le document entier</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Le découpage récursif</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-5|7-12|14-16">
+# src/ingestion/chunker.py
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+def chunk_text(text, document_id, metadata=None):
+    settings = get_settings().chunking
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=settings.chunk_size,       # 512 caractères
+        chunk_overlap=settings.chunk_overlap,  # 50 caractères
+        separators=settings.separators,        # ["\n\n", "\n", ". ", " "]
+        length_function=len,
+    )
+
+    raw_chunks = splitter.split_text(text)
+    # Résultat : liste de strings, chacune ≤ 512 caractères
+    # avec 50 caractères de chevauchement entre chunks consécutifs
+    </code></pre>
+    </div>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">
+        <strong>Récursif</strong> = essaie d'abord de couper aux paragraphes (<code>\n\n</code>), puis aux lignes (<code>\n</code>), puis aux phrases (<code>. </code>), puis aux espaces (<code> </code>)
+    </p>
+</section>
+
+<section>
+    <h2>Paramètres du chunking</h2>
+    <div class="small-code">
+    <pre><code class="language-yaml" data-trim>
+# config/settings.yaml
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  chunk_overlap: 50
+  separators: ["\n\n", "\n", ". ", " "]
+    </code></pre>
+    </div>
+    <svg viewBox="0 0 700 180" style="width:90%;margin:15px auto;display:block;">
+        <rect x="30" y="20" width="500" height="30" rx="4" fill="#bee3f8" stroke="#3182ce" stroke-width="1.5"/>
+        <text x="280" y="40" text-anchor="middle" font-size="12" fill="#2d3748">Chunk 1 (512 caractères)</text>
+        <rect x="480" y="20" width="50" height="30" rx="4" fill="#fed7d7" stroke="#e53e3e" stroke-width="1.5" opacity="0.7"/>
+        <rect x="480" y="70" width="50" height="30" rx="4" fill="#fed7d7" stroke="#e53e3e" stroke-width="1.5" opacity="0.7"/>
+        <rect x="480" y="70" width="500" height="30" rx="4" fill="#c6f6d5" stroke="#38a169" stroke-width="1.5"/>
+        <text x="730" y="90" text-anchor="middle" font-size="12" fill="#2d3748">Chunk 2 (512 caractères)</text>
+        <text x="505" y="55" text-anchor="middle" font-size="10" fill="#e53e3e" font-weight="bold">overlap</text>
+        <line x1="505" y1="50" x2="505" y2="70" stroke="#e53e3e" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="350" y="140" text-anchor="middle" font-size="13" fill="#718096">L'overlap (50 car.) évite de couper une phrase en plein milieu</text>
+        <text x="350" y="165" text-anchor="middle" font-size="12" fill="#a0aec0">Le chunk 2 reprend les derniers mots du chunk 1</text>
+    </svg>
+</section>
+
+<section>
+    <h2>Trade-offs : taille des chunks</h2>
+    <div class="columns">
+        <div class="box box-blue">
+            <h3>Petits chunks (128-256)</h3>
+            <ul style="font-size:0.7em;">
+                <li class="highlight-green">Précis : réponse ciblée</li>
+                <li class="highlight-green">Moins de bruit</li>
+                <li class="highlight-red">Perd le contexte</li>
+                <li class="highlight-red">Plus de chunks à indexer</li>
+            </ul>
+        </div>
+        <div class="box box-purple">
+            <h3>Grands chunks (1024+)</h3>
+            <ul style="font-size:0.7em;">
+                <li class="highlight-green">Plus de contexte</li>
+                <li class="highlight-green">Moins de chunks</li>
+                <li class="highlight-red">Plus de bruit</li>
+                <li class="highlight-red">Moins précis</li>
+            </ul>
+        </div>
+    </div>
+    <div class="fragment box" style="text-align:center;margin-top:15px;">
+        <p style="font-size:0.8em;">Notre choix : <strong>512 caractères</strong> avec overlap de 50 — bon compromis pour des documents techniques</p>
+    </div>
+</section>
+
+<section>
+    <h2>Chaque chunk est identifié</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# src/ingestion/chunker.py — création des objets Chunk
+for idx, raw in enumerate(raw_chunks):
+    chunk_id = f"{document_id}::{uuid.uuid4().hex[:12]}"
+    chunks.append(
+        Chunk(
+            chunk_id=chunk_id,           # ID unique
+            document_id=document_id,     # lien vers le document parent
+            text=raw,                    # le texte du chunk
+            metadata={
+                "chunk_index": idx,      # position dans le document
+                "total_chunks": len(raw_chunks),
+                "filename": filename,
+                "content_type": content_type,
+            },
+        )
+    )
+    </code></pre>
+    </div>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">Les métadonnées permettent de retrouver l'origine de chaque chunk</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 3 : EMBEDDINGS                                        -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 3</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Embeddings</h3>
+    <p style="color: rgba(255,255,255,0.7);">Transformer du texte en vecteurs</p>
+</section>
+
+<section>
+    <h2>C'est quoi un embedding ?</h2>
+    <div class="box">
+        <p>Un <strong>embedding</strong> = une représentation numérique d'un texte</p>
+    </div>
+    <div class="fragment" style="margin-top:20px;">
+        <p style="font-size:0.8em;">"Le chat dort sur le canapé"</p>
+        <p>&darr;</p>
+        <p style="font-size:0.65em; font-family: monospace; background:#f7fafc; padding:10px; border-radius:8px;">
+            [0.023, -0.156, 0.892, 0.034, ..., -0.445, 0.231]
+        </p>
+        <p style="font-size:0.65em; color:#718096;">384 nombres à virgule flottante (dimensions)</p>
+    </div>
+    <div class="fragment box box-green" style="margin-top:15px;">
+        <p style="font-size:0.8em;">L'idée clé : des textes au <strong>sens similaire</strong> produisent des vecteurs <strong>proches</strong></p>
+    </div>
+</section>
+
+<section>
+    <h2>Visualisation : mots proches = vecteurs proches</h2>
+    <svg viewBox="0 0 600 400" style="width:80%;margin:0 auto;display:block;">
+        <!-- Axes -->
+        <line x1="80" y1="350" x2="580" y2="350" stroke="#cbd5e0" stroke-width="1.5"/>
+        <line x1="80" y1="350" x2="80" y2="30" stroke="#cbd5e0" stroke-width="1.5"/>
+        <!-- Animals cluster -->
+        <circle cx="180" cy="100" r="60" fill="#c6f6d5" opacity="0.3" stroke="#38a169" stroke-width="1" stroke-dasharray="5,5"/>
+        <circle cx="160" cy="90" r="6" fill="#38a169"/><text x="175" y="85" font-size="13" fill="#276749">chat</text>
+        <circle cx="200" cy="110" r="6" fill="#38a169"/><text x="215" y="105" font-size="13" fill="#276749">chien</text>
+        <circle cx="170" cy="130" r="6" fill="#38a169"/><text x="185" y="125" font-size="13" fill="#276749">félin</text>
+        <text x="180" y="175" text-anchor="middle" font-size="11" fill="#38a169">animaux</text>
+        <!-- Tech cluster -->
+        <circle cx="420" cy="120" r="70" fill="#bee3f8" opacity="0.3" stroke="#3182ce" stroke-width="1" stroke-dasharray="5,5"/>
+        <circle cx="400" cy="100" r="6" fill="#3182ce"/><text x="415" y="95" font-size="13" fill="#2b6cb0">Python</text>
+        <circle cx="440" cy="130" r="6" fill="#3182ce"/><text x="455" y="125" font-size="13" fill="#2b6cb0">code</text>
+        <circle cx="390" cy="140" r="6" fill="#3182ce"/><text x="405" y="155" font-size="13" fill="#2b6cb0">JavaScript</text>
+        <text x="420" y="200" text-anchor="middle" font-size="11" fill="#3182ce">programmation</text>
+        <!-- Food cluster -->
+        <circle cx="300" cy="290" r="55" fill="#fefcbf" opacity="0.3" stroke="#d69e2e" stroke-width="1" stroke-dasharray="5,5"/>
+        <circle cx="280" cy="280" r="6" fill="#d69e2e"/><text x="295" y="275" font-size="13" fill="#744210">pizza</text>
+        <circle cx="320" cy="300" r="6" fill="#d69e2e"/><text x="335" y="295" font-size="13" fill="#744210">pâtes</text>
+        <circle cx="290" cy="310" r="6" fill="#d69e2e"/><text x="305" y="325" font-size="13" fill="#744210">cuisine</text>
+        <text x="300" y="355" text-anchor="middle" font-size="11" fill="#d69e2e">nourriture</text>
+        <text x="330" y="25" text-anchor="middle" font-size="12" fill="#a0aec0">Projection 2D de vecteurs 384D (t-SNE)</text>
+    </svg>
+</section>
+
+<section>
+    <h2>Le modèle all-MiniLM-L6-v2</h2>
+    <table style="font-size:0.7em;">
+        <tr><th>Propriété</th><th>Valeur</th></tr>
+        <tr><td>Dimensions</td><td><strong>384</strong></td></tr>
+        <tr><td>Taille du modèle</td><td>~80 MB</td></tr>
+        <tr><td>Vitesse</td><td>~14 000 phrases/sec (GPU)</td></tr>
+        <tr><td>Longueur max</td><td>256 tokens</td></tr>
+        <tr><td>Entraîné sur</td><td>1 milliard de paires de phrases</td></tr>
+        <tr><td>Langue</td><td>Multilingue (dont le français)</td></tr>
+    </table>
+    <div class="fragment box" style="margin-top:15px;">
+        <p style="font-size:0.75em;">Choisi pour notre projet car : <strong>léger</strong>, <strong>rapide</strong>, <strong>gratuit</strong>, tourne en local sans GPU</p>
+    </div>
+</section>
+
+<section>
+    <h2>Sentence-Transformers</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-4|6-11|13-16|18-21">
+# src/retrieval/embeddings.py
+from functools import lru_cache
+from sentence_transformers import SentenceTransformer
+from src.core.config import get_settings
+
+@lru_cache(maxsize=1)  # Charger le modèle une seule fois !
+def _load_model() -> SentenceTransformer:
+    settings = get_settings().embeddings
+    model = SentenceTransformer(settings.model)  # "all-MiniLM-L6-v2"
+    return model
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Générer les embeddings pour une liste de textes."""
+    model = _load_model()
+    embeddings = model.encode(texts, normalize_embeddings=True)
+    return embeddings.tolist()
+
+def embed_query(query: str) -> list[float]:
+    """Générer l'embedding pour une question."""
+    model = _load_model()
+    embedding = model.encode(query, normalize_embeddings=True)
+    return embedding.tolist()
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Pourquoi normaliser ?</h2>
+    <div class="box">
+        <p style="font-size:0.8em;"><code>normalize_embeddings=True</code> rend tous les vecteurs de <strong>norme 1</strong></p>
+    </div>
+    <div class="fragment" style="margin-top:15px;">
+        <p style="font-size:0.8em;">Avantage : la <strong>distance cosinus</strong> devient un simple <strong>produit scalaire</strong></p>
+        <p style="font-size:0.7em;color:#718096;">Calcul beaucoup plus rapide pour la recherche !</p>
+    </div>
+</section>
+
+<section>
+    <h2>Similarité cosinus</h2>
+    <svg viewBox="0 0 650 300" style="width:85%;margin:10px auto;display:block;">
+        <!-- Axes -->
+        <line x1="100" y1="250" x2="400" y2="250" stroke="#cbd5e0" stroke-width="1.5"/>
+        <line x1="100" y1="250" x2="100" y2="50" stroke="#cbd5e0" stroke-width="1.5"/>
+        <!-- Vector A -->
+        <line x1="100" y1="250" x2="300" y2="100" stroke="#3182ce" stroke-width="3" marker-end="url(#arrowB)"/>
+        <text x="210" y="150" font-size="16" fill="#3182ce" font-weight="bold">A</text>
+        <!-- Vector B -->
+        <line x1="100" y1="250" x2="350" y2="150" stroke="#38a169" stroke-width="3" marker-end="url(#arrowG)"/>
+        <text x="250" y="210" font-size="16" fill="#38a169" font-weight="bold">B</text>
+        <!-- Angle -->
+        <path d="M 140,230 A 30,30 0 0,0 130,215" fill="none" stroke="#e53e3e" stroke-width="2"/>
+        <text x="155" y="218" font-size="14" fill="#e53e3e">&theta;</text>
+        <!-- Formula -->
+        <text x="530" y="100" text-anchor="middle" font-size="16" fill="#2d3748">cos(&theta;) = </text>
+        <text x="530" y="130" text-anchor="middle" font-size="14" fill="#2d3748">A &middot; B</text>
+        <line x1="480" y1="140" x2="580" y2="140" stroke="#2d3748" stroke-width="1.5"/>
+        <text x="530" y="165" text-anchor="middle" font-size="14" fill="#2d3748">||A|| &times; ||B||</text>
+        <!-- Scale -->
+        <text x="530" y="210" text-anchor="middle" font-size="13" fill="#38a169">cos = 1 &rarr; identiques</text>
+        <text x="530" y="235" text-anchor="middle" font-size="13" fill="#d69e2e">cos = 0 &rarr; sans rapport</text>
+        <text x="530" y="260" text-anchor="middle" font-size="13" fill="#e53e3e">cos = -1 &rarr; opposés</text>
+        <defs>
+            <marker id="arrowB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#3182ce"/></marker>
+            <marker id="arrowG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38a169"/></marker>
+        </defs>
+    </svg>
+</section>
+
+<section>
+    <h2>Cosinus vs Euclidienne</h2>
+    <div class="columns">
+        <div class="box box-blue">
+            <h3>Distance Euclidienne</h3>
+            <p style="font-size:0.7em;">Mesure la <strong>distance absolue</strong> entre deux points</p>
+            <p style="font-size:0.65em;color:#718096;">Sensible à la longueur des vecteurs</p>
+            <p style="font-size:0.65em;">Un texte long et un texte court sur le même sujet peuvent sembler "loin"</p>
+        </div>
+        <div class="box box-green">
+            <h3>Similarité Cosinus</h3>
+            <p style="font-size:0.7em;">Mesure l'<strong>angle</strong> entre deux vecteurs</p>
+            <p style="font-size:0.65em;color:#718096;">Insensible à la longueur</p>
+            <p style="font-size:0.65em;">Deux textes sur le même sujet sont "proches" quelle que soit leur taille</p>
+        </div>
+    </div>
+    <div class="fragment box" style="text-align:center;margin-top:15px;">
+        <p style="font-size:0.8em;">C'est pourquoi ChromaDB utilise <code>"hnsw:space": "cosine"</code></p>
+    </div>
+</section>
+
+<section>
+    <h2>Quiz : quels textes sont proches ?</h2>
+    <div class="box">
+        <p style="font-size:0.8em;">Texte A : "Le Python est un excellent langage de programmation"</p>
+        <p style="font-size:0.8em;">Texte B : "Le python royal est un serpent non venimeux"</p>
+        <p style="font-size:0.8em;">Texte C : "JavaScript et TypeScript sont des langages web"</p>
+    </div>
+    <div class="fragment" style="margin-top:20px;">
+        <table>
+            <tr><th>Paire</th><th>Similarité</th></tr>
+            <tr><td>A &harr; B</td><td style="color:#d69e2e;">~0.35 (mots communs mais sens différent)</td></tr>
+            <tr><td>A &harr; C</td><td style="color:#38a169;">~0.72 (même domaine : programmation)</td></tr>
+            <tr><td>B &harr; C</td><td style="color:#e53e3e;">~0.12 (rien à voir)</td></tr>
+        </table>
+    </div>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">L'embedding capture le <strong>sens</strong>, pas juste les mots-clés !</p>
+</section>
+
+<section>
+    <h2>Ce qui se passe dans embed_texts()</h2>
+    <svg viewBox="0 0 700 250" style="width:90%;margin:15px auto;display:block;">
+        <rect x="20" y="20" width="180" height="90" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="2"/>
+        <text x="110" y="50" text-anchor="middle" font-size="12" fill="#2d3748">Liste de textes</text>
+        <text x="110" y="70" text-anchor="middle" font-size="10" fill="#718096">"Le chat dort..."</text>
+        <text x="110" y="85" text-anchor="middle" font-size="10" fill="#718096">"La politique RH..."</text>
+        <text x="110" y="100" text-anchor="middle" font-size="10" fill="#718096">"Budget Q3..."</text>
+
+        <line x1="200" y1="65" x2="270" y2="65" stroke="#718096" stroke-width="2" marker-end="url(#arrow3)"/>
+
+        <rect x="270" y="20" width="180" height="90" rx="8" fill="#fefcbf" stroke="#d69e2e" stroke-width="2"/>
+        <text x="360" y="45" text-anchor="middle" font-size="12" fill="#744210" font-weight="bold">all-MiniLM-L6-v2</text>
+        <text x="360" y="65" text-anchor="middle" font-size="10" fill="#744210">Tokenise</text>
+        <text x="360" y="80" text-anchor="middle" font-size="10" fill="#744210">Réseau de neurones</text>
+        <text x="360" y="95" text-anchor="middle" font-size="10" fill="#744210">Normalise</text>
+
+        <line x1="450" y1="65" x2="510" y2="65" stroke="#718096" stroke-width="2" marker-end="url(#arrow3)"/>
+
+        <rect x="510" y="20" width="180" height="90" rx="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <text x="600" y="50" text-anchor="middle" font-size="12" fill="#276749">Vecteurs (embeddings)</text>
+        <text x="600" y="70" text-anchor="middle" font-size="9" fill="#718096">[0.02, -0.15, ..., 0.23]</text>
+        <text x="600" y="85" text-anchor="middle" font-size="9" fill="#718096">[0.81, 0.04, ..., -0.67]</text>
+        <text x="600" y="100" text-anchor="middle" font-size="9" fill="#718096">[-0.33, 0.72, ..., 0.11]</text>
+
+        <text x="350" y="160" text-anchor="middle" font-size="13" fill="#718096">Chaque texte &rarr; 1 vecteur de 384 nombres</text>
+        <text x="350" y="185" text-anchor="middle" font-size="12" fill="#a0aec0">Batch processing : tous les chunks d'un coup pour la performance</text>
+        <defs><marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/></marker></defs>
+    </svg>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 4 : BASE VECTORIELLE CHROMADB                         -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 4</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Base vectorielle ChromaDB</h3>
+    <p style="color: rgba(255,255,255,0.7);">Stocker et rechercher par similarité</p>
+</section>
+
+<section>
+    <h2>SQL vs Base vectorielle</h2>
+    <div class="columns">
+        <div class="box">
+            <h3>SQL (classique)</h3>
+            <pre style="font-size:0.55em;"><code class="language-sql" data-trim>
+SELECT * FROM docs
+WHERE content LIKE '%budget%'
+            </code></pre>
+            <p style="font-size:0.7em;">Recherche par <strong>mots-clés exacts</strong></p>
+            <p style="font-size:0.65em;color:#e53e3e;">"dépenses" ne matche pas "budget"</p>
+        </div>
+        <div class="box fragment">
+            <h3>Base vectorielle</h3>
+            <pre style="font-size:0.55em;"><code class="language-python" data-trim>
+store.search("Quel est le budget ?")
+            </code></pre>
+            <p style="font-size:0.7em;">Recherche par <strong>similarité de sens</strong></p>
+            <p style="font-size:0.65em;color:#38a169;">"dépenses" est proche de "budget"</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>L'algorithme HNSW</h2>
+    <p style="font-size:0.75em;">Hierarchical Navigable Small World</p>
+    <svg viewBox="0 0 650 320" style="width:85%;margin:10px auto;display:block;">
+        <!-- Layer 2 (top) -->
+        <text x="30" y="50" font-size="12" fill="#805ad5">Couche 2</text>
+        <circle cx="200" cy="45" r="8" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <circle cx="450" cy="45" r="8" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <line x1="208" y1="45" x2="442" y2="45" stroke="#805ad5" stroke-width="1.5"/>
+        <!-- Layer 1 -->
+        <text x="30" y="140" font-size="12" fill="#3182ce">Couche 1</text>
+        <circle cx="150" cy="135" r="8" fill="#bee3f8" stroke="#3182ce" stroke-width="2"/>
+        <circle cx="280" cy="135" r="8" fill="#bee3f8" stroke="#3182ce" stroke-width="2"/>
+        <circle cx="400" cy="135" r="8" fill="#bee3f8" stroke="#3182ce" stroke-width="2"/>
+        <circle cx="500" cy="135" r="8" fill="#bee3f8" stroke="#3182ce" stroke-width="2"/>
+        <line x1="158" y1="135" x2="272" y2="135" stroke="#3182ce" stroke-width="1.5"/>
+        <line x1="288" y1="135" x2="392" y2="135" stroke="#3182ce" stroke-width="1.5"/>
+        <line x1="408" y1="135" x2="492" y2="135" stroke="#3182ce" stroke-width="1.5"/>
+        <!-- Vertical links -->
+        <line x1="200" y1="53" x2="150" y2="127" stroke="#a0aec0" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="200" y1="53" x2="280" y2="127" stroke="#a0aec0" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="450" y1="53" x2="400" y2="127" stroke="#a0aec0" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="450" y1="53" x2="500" y2="127" stroke="#a0aec0" stroke-width="1" stroke-dasharray="4,3"/>
+        <!-- Layer 0 (bottom) -->
+        <text x="30" y="240" font-size="12" fill="#38a169">Couche 0</text>
+        <circle cx="100" cy="235" r="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <circle cx="180" cy="235" r="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <circle cx="260" cy="235" r="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <circle cx="340" cy="235" r="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <circle cx="420" cy="235" r="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <circle cx="500" cy="235" r="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <circle cx="580" cy="235" r="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <line x1="108" y1="235" x2="172" y2="235" stroke="#38a169" stroke-width="1.5"/>
+        <line x1="188" y1="235" x2="252" y2="235" stroke="#38a169" stroke-width="1.5"/>
+        <line x1="268" y1="235" x2="332" y2="235" stroke="#38a169" stroke-width="1.5"/>
+        <line x1="348" y1="235" x2="412" y2="235" stroke="#38a169" stroke-width="1.5"/>
+        <line x1="428" y1="235" x2="492" y2="235" stroke="#38a169" stroke-width="1.5"/>
+        <line x1="508" y1="235" x2="572" y2="235" stroke="#38a169" stroke-width="1.5"/>
+        <text x="325" y="295" text-anchor="middle" font-size="12" fill="#718096">On commence en haut (vue grossière) et on descend (vue précise)</text>
+        <text x="325" y="315" text-anchor="middle" font-size="12" fill="#a0aec0">Complexité : O(log n) au lieu de O(n) pour un scan complet</text>
+    </svg>
+</section>
+
+<section>
+    <h2>ChromaDB : initialisation</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-4|6-16">
+# src/retrieval/vector_store.py
+import chromadb
+from pathlib import Path
+from src.core.config import get_settings
+
+class VectorStore:
+    def __init__(self, collection_name=None):
+        settings = get_settings().vector_store
+        persist_dir = settings.persist_directory
+        Path(persist_dir).mkdir(parents=True, exist_ok=True)
+
+        # Client persistant : les données survivent au redémarrage
+        self._client = chromadb.PersistentClient(path=persist_dir)
+
+        # Collection = une "table" dans ChromaDB
+        self._collection = self._client.get_or_create_collection(
+            name=name,
+            metadata={"hnsw:space": "cosine"},  # Similarité cosinus !
+        )
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Ajouter des chunks</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-5|7-8|10-15">
+# src/retrieval/vector_store.py — méthode add_chunks()
+def add_chunks(self, chunks: list[Chunk]) -> None:
+    texts = [c.text for c in chunks]
+    ids = [c.chunk_id for c in chunks]
+    metadatas = [{**c.metadata, "document_id": c.document_id} for c in chunks]
+
+    # Générer les embeddings pour tous les chunks
+    embeddings = embed_texts(texts)
+
+    # Stocker dans ChromaDB
+    self._collection.add(
+        ids=ids,              # identifiants uniques
+        documents=texts,      # texte original (pour le retourner)
+        embeddings=embeddings,# vecteurs 384D
+        metadatas=metadatas,  # métadonnées (filename, etc.)
+    )
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Rechercher par similarité</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-3|5-6|8-12|14-18">
+# src/retrieval/vector_store.py — méthode search()
+def search(self, query, top_k=5, score_threshold=0.3):
+    query_embedding = embed_query(query)
+
+    results = self._collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"],
+    )
+
+    sources = []
+    for idx, chunk_id in enumerate(results["ids"][0]):
+        # ChromaDB retourne la distance cosinus → convertir en score
+        distance = results["distances"][0][idx]
+        score = 1.0 - distance  # distance 0 → score 1 (identique)
+
+        if score < score_threshold:  # Filtrer les résultats trop faibles
+            continue
+
+        sources.append(SourceDocument(
+            chunk_id=chunk_id,
+            text=results["documents"][0][idx],
+            score=round(score, 4),
+        ))
+    return sources
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Distance &rarr; Score de similarité</h2>
+    <div class="box">
+        <p><code>score = 1.0 - distance_cosinus</code></p>
+    </div>
+    <table style="margin-top:20px;">
+        <tr><th>Distance</th><th>Score</th><th>Signification</th></tr>
+        <tr><td>0.0</td><td class="highlight-green">1.0</td><td>Textes identiques</td></tr>
+        <tr><td>0.3</td><td style="color:#38a169;">0.7</td><td>Très similaires</td></tr>
+        <tr><td>0.7</td><td style="color:#d69e2e;">0.3</td><td>Seuil par défaut</td></tr>
+        <tr><td>1.0</td><td class="highlight-red">0.0</td><td>Sans rapport</td></tr>
+    </table>
+    <p class="fragment" style="font-size:0.7em;color:#718096;margin-top:15px;">
+        Notre <code>score_threshold = 0.3</code> filtre les chunks dont le score est trop bas
+    </p>
+</section>
+
+<section>
+    <h2>Top-K et score_threshold</h2>
+    <div class="small-code">
+    <pre><code class="language-yaml" data-trim>
+# config/settings.yaml
+retrieval:
+  top_k: 5              # Retourner au maximum 5 résultats
+  score_threshold: 0.3   # Ignorer les résultats avec score &lt; 0.3
+    </code></pre>
+    </div>
+    <svg viewBox="0 0 600 200" style="width:80%;margin:15px auto;display:block;">
+        <rect x="30" y="20" width="540" height="35" rx="6" fill="#c6f6d5" stroke="#38a169" stroke-width="1.5"/>
+        <text x="50" y="43" font-size="12" fill="#276749">Chunk A — score: 0.89</text>
+        <rect x="30" y="60" width="440" height="35" rx="6" fill="#c6f6d5" stroke="#38a169" stroke-width="1.5"/>
+        <text x="50" y="83" font-size="12" fill="#276749">Chunk B — score: 0.72</text>
+        <rect x="30" y="100" width="300" height="35" rx="6" fill="#c6f6d5" stroke="#38a169" stroke-width="1.5"/>
+        <text x="50" y="123" font-size="12" fill="#276749">Chunk C — score: 0.51</text>
+        <rect x="30" y="140" width="140" height="35" rx="6" fill="#fed7d7" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="5,5"/>
+        <text x="50" y="163" font-size="12" fill="#9b2c2c">Chunk D — score: 0.22</text>
+        <text x="200" y="163" font-size="11" fill="#e53e3e">&larr; filtré (score &lt; 0.3)</text>
+    </svg>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 5 : PIPELINE RAG COMPLET                              -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 5</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Le pipeline RAG complet</h3>
+    <p style="color: rgba(255,255,255,0.7);">Retrieve &rarr; Augment &rarr; Generate</p>
+</section>
+
+<section>
+    <h2>Schéma complet du pipeline query</h2>
+    <svg viewBox="0 0 750 350" style="width:95%;margin:5px auto;display:block;">
+        <defs><marker id="arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/></marker></defs>
+        <!-- Step 1 -->
+        <rect x="20" y="20" width="150" height="55" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="2"/>
+        <text x="95" y="43" text-anchor="middle" font-size="12" font-weight="bold" fill="#2b6cb0">1. Question</text>
+        <text x="95" y="60" text-anchor="middle" font-size="10" fill="#4a5568">"Quel est le budget ?"</text>
+        <!-- Step 2 -->
+        <line x1="170" y1="47" x2="210" y2="47" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow4)"/>
+        <rect x="210" y="20" width="150" height="55" rx="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <text x="285" y="43" text-anchor="middle" font-size="12" font-weight="bold" fill="#276749">2. Embed query</text>
+        <text x="285" y="60" text-anchor="middle" font-size="10" fill="#4a5568">[0.23, -0.1, ...]</text>
+        <!-- Step 3 -->
+        <line x1="360" y1="47" x2="400" y2="47" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow4)"/>
+        <rect x="400" y="20" width="150" height="55" rx="8" fill="#fefcbf" stroke="#d69e2e" stroke-width="2"/>
+        <text x="475" y="43" text-anchor="middle" font-size="12" font-weight="bold" fill="#744210">3. Recherche</text>
+        <text x="475" y="60" text-anchor="middle" font-size="10" fill="#4a5568">ChromaDB top-5</text>
+        <!-- Step 4 -->
+        <line x1="550" y1="47" x2="590" y2="47" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow4)"/>
+        <rect x="590" y="20" width="140" height="55" rx="8" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <text x="660" y="43" text-anchor="middle" font-size="12" font-weight="bold" fill="#553c9a">4. Sources</text>
+        <text x="660" y="60" text-anchor="middle" font-size="10" fill="#4a5568">3 chunks trouvés</text>
+        <!-- Step 5 - Build prompt -->
+        <line x1="660" y1="75" x2="660" y2="120" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow4)"/>
+        <rect x="400" y="120" width="330" height="55" rx="8" fill="#fed7e2" stroke="#d53f8c" stroke-width="2"/>
+        <text x="565" y="143" text-anchor="middle" font-size="12" font-weight="bold" fill="#97266d">5. Construction du prompt</text>
+        <text x="565" y="160" text-anchor="middle" font-size="10" fill="#4a5568">System prompt + contexte + question</text>
+        <!-- Step 6 - Claude -->
+        <line x1="565" y1="175" x2="565" y2="220" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow4)"/>
+        <rect x="440" y="220" width="250" height="55" rx="8" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
+        <text x="565" y="243" text-anchor="middle" font-size="12" font-weight="bold" fill="#9b2c2c">6. Claude API</text>
+        <text x="565" y="260" text-anchor="middle" font-size="10" fill="#4a5568">Génération de la réponse</text>
+        <!-- Step 7 -->
+        <line x1="440" y1="247" x2="350" y2="247" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow4)"/>
+        <rect x="150" y="220" width="200" height="55" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="2"/>
+        <text x="250" y="243" text-anchor="middle" font-size="12" font-weight="bold" fill="#2b6cb0">7. Réponse</text>
+        <text x="250" y="260" text-anchor="middle" font-size="10" fill="#4a5568">Réponse + sources citées</text>
+        <text x="375" y="320" text-anchor="middle" font-size="12" fill="#718096">Tout cela se passe dans rag_engine.py &rarr; fonction query()</text>
+    </svg>
+</section>
+
+<section>
+    <h2>Étape 1 &amp; 2 : Embedding de la question</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-3|5-7|9-11">
+# src/retrieval/rag_engine.py — fonction query()
+def query(request: QueryRequest) -> QueryResponse:
+    start = time.perf_counter()
+
+    # 1. Retrieve : chercher les chunks pertinents
+    store = get_vector_store(collection=request.collection)
+    sources = store.search(
+        query=request.question,        # "Quel est le budget ?"
+        top_k=request.top_k,           # 5 résultats max
+        score_threshold=request.score_threshold,  # score min 0.3
+    )
+    </code></pre>
+    </div>
+    <div class="fragment box" style="font-size:0.75em;">
+        <p><code>store.search()</code> appelle <code>embed_query()</code> en interne pour vectoriser la question, puis fait une recherche HNSW dans ChromaDB</p>
+    </div>
+</section>
+
+<section>
+    <h2>Étape 3 : Construction du contexte</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# src/retrieval/rag_engine.py
+def _build_context_block(sources: list[SourceDocument]) -> str:
+    parts = []
+    for i, src in enumerate(sources, 1):
+        header = f"[Source {i} | score={src.score}]"
+        meta_str = ", ".join(
+            f"{k}={v}" for k, v in src.metadata.items()
+            if k != "chunk_index"
+        )
+        if meta_str:
+            header += f" ({meta_str})"
+        parts.append(f"{header}\n{src.text}")
+    return "\n\n---\n\n".join(parts)
+    </code></pre>
+    </div>
+    <div class="fragment box" style="font-size:0.7em;">
+        <p>Résultat : un bloc de texte structuré avec chaque source numérotée et son score</p>
+    </div>
+</section>
+
+<section>
+    <h2>Le System Prompt</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# src/retrieval/rag_engine.py
+SYSTEM_PROMPT = """\
+You are an enterprise AI assistant.
+Answer questions using ONLY the provided context documents.
+
+Rules:
+1. Base your answer strictly on the context provided below.
+2. If the context does not contain enough information
+   to answer, say so clearly.
+3. Cite which source documents support your answer
+   when possible.
+4. Be concise, accurate, and professional.
+"""
+    </code></pre>
+    </div>
+    <div class="fragment box box-blue" style="font-size:0.75em;">
+        <p><strong>Clé du RAG :</strong> on ordonne au LLM de répondre <em>uniquement</em> à partir du contexte fourni. Cela réduit drastiquement les hallucinations.</p>
+    </div>
+</section>
+
+<section>
+    <h2>L'injection du contexte</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# src/retrieval/rag_engine.py
+CONTEXT_TEMPLATE = """\
+## Retrieved Context
+
+{context}
+
+## User Question
+
+{question}
+"""
+
+# Assemblage du message utilisateur
+if sources:
+    context_block = _build_context_block(sources)
+    user_message = CONTEXT_TEMPLATE.format(
+        context=context_block,
+        question=request.question,
+    )
+    </code></pre>
+    </div>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">Le LLM reçoit : system prompt (règles) + contexte (documents) + question (utilisateur)</p>
+</section>
+
+<section>
+    <h2>Étape 4 : Génération par Claude</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-3|5-12|14-15">
+# src/retrieval/rag_engine.py
+client = anthropic.Anthropic(api_key=api_key)
+
+response = client.messages.create(
+    model=settings.llm.model,        # "claude-sonnet-4-20250514"
+    max_tokens=settings.llm.max_tokens,  # 4096
+    temperature=settings.llm.temperature,# 0.1 (peu créatif)
+    system=SYSTEM_PROMPT,
+    messages=[{"role": "user", "content": user_message}],
+)
+
+answer = response.content[0].text
+    </code></pre>
+    </div>
+    <div class="fragment" style="margin-top:15px;">
+        <table style="font-size:0.65em;">
+            <tr><th>Paramètre</th><th>Valeur</th><th>Pourquoi</th></tr>
+            <tr><td>temperature</td><td>0.1</td><td>Réponses factuelles, peu de créativité</td></tr>
+            <tr><td>max_tokens</td><td>4096</td><td>Réponses assez longues si nécessaire</td></tr>
+            <tr><td>model</td><td>claude-sonnet</td><td>Bon compromis coût/qualité</td></tr>
+        </table>
+    </div>
+</section>
+
+<section>
+    <h2>Fallback sans clé API</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# src/retrieval/rag_engine.py
+api_key = settings.llm.api_key
+if not api_key:
+    # Fallback : retourner les sources brutes sans génération LLM
+    return QueryResponse(
+        answer=(
+            "LLM API key not configured. Here are the most "
+            "relevant document excerpts found:\n\n"
+            + "\n\n---\n\n".join(s.text for s in sources[:3])
+            if sources
+            else "No API key configured and no relevant "
+                 "documents found."
+        ),
+        sources=sources,
+        model="none (no API key)",
+        latency_ms=round(elapsed, 1),
+    )
+    </code></pre>
+    </div>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">Le système reste utilisable même sans clé API : on voit les chunks retrouvés</p>
+</section>
+
+<section>
+    <h2>Démo : flux complet</h2>
+    <div style="font-size:0.7em;text-align:left;">
+        <div class="box" style="margin-bottom:10px;">
+            <p><strong>Question :</strong> "Quelle est la politique de télétravail ?"</p>
+        </div>
+        <div class="fragment box box-green" style="margin-bottom:10px;">
+            <p><strong>1. Embed :</strong> question &rarr; vecteur [0.12, -0.34, ..., 0.56]</p>
+        </div>
+        <div class="fragment box" style="margin-bottom:10px;">
+            <p><strong>2. Search :</strong> ChromaDB retourne 3 chunks (scores: 0.87, 0.72, 0.61)</p>
+        </div>
+        <div class="fragment box box-purple" style="margin-bottom:10px;">
+            <p><strong>3. Prompt :</strong> "Voici les documents... Réponds uniquement à partir du contexte."</p>
+        </div>
+        <div class="fragment box box-blue">
+            <p><strong>4. Claude :</strong> "D'après le document politique-rh.pdf (Source 1), le télétravail est autorisé 2 jours par semaine, sous réserve de validation par le manager..."</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>La réponse structurée</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# Objet retourné par query()
+return QueryResponse(
+    answer=answer,               # Texte généré par Claude
+    sources=sources,             # Liste des chunks utilisés
+    query=request.question,      # Question originale
+    model=settings.llm.model,    # Modèle utilisé
+    latency_ms=round(elapsed, 1),# Temps total en ms
+)
+
+# Chaque source contient :
+# - document_id : identifiant du document
+# - chunk_id    : identifiant du chunk
+# - text        : texte du chunk
+# - score       : score de similarité (0 à 1)
+# - metadata    : filename, content_type, etc.
+    </code></pre>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 6 : ARCHITECTURE API                                  -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 6</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Architecture API</h3>
+    <p style="color: rgba(255,255,255,0.7);">FastAPI et endpoints REST</p>
+</section>
+
+<section>
+    <h2>Pourquoi FastAPI ?</h2>
+    <div class="columns">
+        <div>
+            <ul style="font-size:0.75em;">
+                <li class="fragment"><strong>Async</strong> natif (requêtes concurrentes)</li>
+                <li class="fragment"><strong>Validation</strong> automatique avec Pydantic</li>
+                <li class="fragment"><strong>Documentation</strong> auto (Swagger UI)</li>
+                <li class="fragment"><strong>Type hints</strong> Python</li>
+                <li class="fragment"><strong>Performances</strong> comparables à Node.js</li>
+            </ul>
+        </div>
+        <div class="fragment">
+            <div class="small-code">
+            <pre><code class="language-python" data-trim>
+from fastapi import FastAPI
+app = FastAPI(title="Enterprise RAG")
+
+@app.post("/query")
+async def query_rag(request: QueryRequest):
+    return rag_query(request)
+            </code></pre>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Les routes REST</h2>
+    <table style="font-size:0.6em;">
+        <tr><th>Méthode</th><th>Route</th><th>Description</th></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/health</code></td><td>État du système</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/metrics</code></td><td>Métriques Prometheus</td></tr>
+        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/auth/token</code></td><td>Obtenir un JWT</td></tr>
+        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/documents/upload</code></td><td>Upload un document</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/documents</code></td><td>Lister les documents</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/documents/{id}</code></td><td>Détail d'un document</td></tr>
+        <tr><td style="color:#e53e3e;font-weight:bold;">DELETE</td><td><code>/documents/{id}</code></td><td>Supprimer un document</td></tr>
+        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/query</code></td><td>Poser une question (RAG)</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/collections</code></td><td>Lister les collections</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Schémas Pydantic</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# src/models/schemas.py (simplifié)
+from pydantic import BaseModel
+
+class QueryRequest(BaseModel):
+    question: str                     # La question de l'utilisateur
+    collection: str | None = None     # Collection cible (optionnel)
+    top_k: int = 5                    # Nombre de résultats
+    score_threshold: float = 0.3      # Score minimum
+
+class QueryResponse(BaseModel):
+    answer: str                       # Réponse générée
+    sources: list[SourceDocument]     # Sources utilisées
+    query: str                        # Question originale
+    model: str                        # Modèle LLM utilisé
+    latency_ms: float                 # Temps de réponse
+    </code></pre>
+    </div>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">Pydantic valide automatiquement les types et génère la doc OpenAPI</p>
+</section>
+
+<section>
+    <h2>Le flux requête &rarr; réponse</h2>
+    <svg viewBox="0 0 700 250" style="width:90%;margin:15px auto;display:block;">
+        <defs><marker id="arrow5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/></marker></defs>
+        <!-- Client -->
+        <rect x="10" y="50" width="100" height="60" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="2"/>
+        <text x="60" y="75" text-anchor="middle" font-size="12" fill="#2b6cb0">Client</text>
+        <text x="60" y="95" text-anchor="middle" font-size="10" fill="#4a5568">POST /query</text>
+        <line x1="110" y1="80" x2="155" y2="80" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow5)"/>
+        <!-- FastAPI -->
+        <rect x="155" y="40" width="110" height="80" rx="8" fill="#fefcbf" stroke="#d69e2e" stroke-width="2"/>
+        <text x="210" y="65" text-anchor="middle" font-size="11" font-weight="bold" fill="#744210">FastAPI</text>
+        <text x="210" y="80" text-anchor="middle" font-size="9" fill="#744210">Validation</text>
+        <text x="210" y="95" text-anchor="middle" font-size="9" fill="#744210">Auth check</text>
+        <text x="210" y="110" text-anchor="middle" font-size="9" fill="#744210">Métriques</text>
+        <line x1="265" y1="80" x2="310" y2="80" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow5)"/>
+        <!-- RAG Engine -->
+        <rect x="310" y="50" width="120" height="60" rx="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <text x="370" y="75" text-anchor="middle" font-size="11" font-weight="bold" fill="#276749">RAG Engine</text>
+        <text x="370" y="92" text-anchor="middle" font-size="9" fill="#276749">rag_engine.py</text>
+        <!-- ChromaDB -->
+        <line x1="370" y1="110" x2="370" y2="150" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow5)"/>
+        <rect x="310" y="150" width="120" height="45" rx="8" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <text x="370" y="178" text-anchor="middle" font-size="11" fill="#553c9a">ChromaDB</text>
+        <!-- Claude -->
+        <line x1="430" y1="80" x2="480" y2="80" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow5)"/>
+        <rect x="480" y="50" width="120" height="60" rx="8" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
+        <text x="540" y="75" text-anchor="middle" font-size="11" font-weight="bold" fill="#9b2c2c">Claude API</text>
+        <text x="540" y="92" text-anchor="middle" font-size="9" fill="#9b2c2c">Génération</text>
+        <!-- Response back -->
+        <line x1="540" y1="110" x2="540" y2="210" stroke="#3182ce" stroke-width="1.5" stroke-dasharray="6,4"/>
+        <line x1="540" y1="210" x2="65" y2="210" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrow5)" stroke-dasharray="6,4"/>
+        <text x="300" y="230" text-anchor="middle" font-size="10" fill="#3182ce">QueryResponse (JSON)</text>
+    </svg>
+</section>
+
+<section>
+    <h2>Upload de documents</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim data-line-numbers="1-6|8-11|13-16">
+# src/api/routes.py
+@router.post("/documents/upload", status_code=201)
+async def upload_document(
+    file: UploadFile = File(...),     # Fichier multipart
+    user: dict | None = Depends(get_current_user),
+):
+    content_type = file.content_type or "application/octet-stream"
+    content = await file.read()       # Lire le contenu binaire
+    filename = file.filename or "untitled"
+
+    # Appeler le pipeline complet : parse → chunk → embed → store
+    result = ingest_document(content, filename, content_type)
+
+    if result.metadata.status == "failed":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Ingestion failed: {result.metadata.error}",
+        )
+    return result
+    </code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>La route query</h2>
+    <div class="small-code">
+    <pre><code class="language-python" data-trim>
+# src/api/routes.py
+@router.post("/query", response_model=QueryResponse)
+async def query_rag(
+    request: QueryRequest,
+    user: dict | None = Depends(get_current_user),
+):
+    QUERY_COUNT.inc()                  # Métrique Prometheus
+    start = time.perf_counter()
+
+    result = rag_query(request)        # Appel au RAG engine
+
+    elapsed = time.perf_counter() - start
+    QUERY_LATENCY.observe(elapsed)     # Métrique latence
+
+    return result
+    </code></pre>
+    </div>
+    <div class="fragment box" style="font-size:0.7em;">
+        <p><strong>Monitoring intégré</strong> : chaque requête est comptée et sa latence mesurée (Prometheus)</p>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 7 : POUR ALLER PLUS LOIN                              -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 7</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Pour aller plus loin</h3>
+    <p style="color: rgba(255,255,255,0.7);">Techniques avancées de RAG</p>
+</section>
+
+<section>
+    <h2>Reranking</h2>
+    <div class="box">
+        <p style="font-size:0.8em;"><strong>Problème :</strong> la recherche vectorielle est rapide mais approximative</p>
+    </div>
+    <div class="fragment" style="margin-top:15px;">
+        <p style="font-size:0.8em;"><strong>Solution :</strong> un 2e modèle ré-ordonne les résultats avec plus de précision</p>
+        <svg viewBox="0 0 600 130" style="width:80%;margin:10px auto;display:block;">
+            <defs><marker id="arrow6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/></marker></defs>
+            <rect x="10" y="20" width="130" height="50" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="1.5"/>
+            <text x="75" y="40" text-anchor="middle" font-size="11" fill="#2b6cb0">Recherche</text>
+            <text x="75" y="55" text-anchor="middle" font-size="10" fill="#4a5568">top-20 rapide</text>
+            <line x1="140" y1="45" x2="190" y2="45" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow6)"/>
+            <rect x="190" y="20" width="130" height="50" rx="8" fill="#fefcbf" stroke="#d69e2e" stroke-width="1.5"/>
+            <text x="255" y="40" text-anchor="middle" font-size="11" fill="#744210">Reranker</text>
+            <text x="255" y="55" text-anchor="middle" font-size="10" fill="#4a5568">Cross-encoder</text>
+            <line x1="320" y1="45" x2="370" y2="45" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow6)"/>
+            <rect x="370" y="20" width="130" height="50" rx="8" fill="#c6f6d5" stroke="#38a169" stroke-width="1.5"/>
+            <text x="435" y="40" text-anchor="middle" font-size="11" fill="#276749">Résultat final</text>
+            <text x="435" y="55" text-anchor="middle" font-size="10" fill="#4a5568">top-5 précis</text>
+            <text x="275" y="100" text-anchor="middle" font-size="11" fill="#718096">Modèles : Cohere Rerank, cross-encoder/ms-marco</text>
+        </svg>
+    </div>
+</section>
+
+<section>
+    <h2>Recherche hybride</h2>
+    <div class="columns">
+        <div class="box">
+            <h3 style="font-size:0.9em;">BM25 (mots-clés)</h3>
+            <p style="font-size:0.65em;">Recherche exacte par termes</p>
+            <p style="font-size:0.6em;color:#718096;">"budget Q3" &rarr; trouve les docs avec ces mots exacts</p>
+        </div>
+        <div style="display:flex;align-items:center;font-size:2em;color:#718096;">+</div>
+        <div class="box">
+            <h3 style="font-size:0.9em;">Vectorielle (sens)</h3>
+            <p style="font-size:0.65em;">Recherche sémantique</p>
+            <p style="font-size:0.6em;color:#718096;">"dépenses trimestrielles" &rarr; comprend le sens</p>
+        </div>
+    </div>
+    <div class="fragment box box-green" style="text-align:center;margin-top:15px;">
+        <p style="font-size:0.8em;"><strong>Hybride</strong> = combiner les scores des deux approches pour le meilleur des deux mondes</p>
+    </div>
+</section>
+
+<section>
+    <h2>Fine-tuning des embeddings</h2>
+    <div class="box">
+        <p style="font-size:0.8em;">Entraîner le modèle d'embedding sur <strong>vos propres données</strong> pour améliorer la pertinence</p>
+    </div>
+    <div class="fragment" style="margin-top:15px;">
+        <p style="font-size:0.75em;"><strong>Comment ?</strong></p>
+        <ul style="font-size:0.7em;">
+            <li>Collecter des paires (question, chunk pertinent)</li>
+            <li>Fine-tuner le modèle avec ces paires</li>
+            <li>Le modèle apprend votre vocabulaire métier</li>
+        </ul>
+    </div>
+    <p class="fragment" style="font-size:0.65em;color:#718096;">Exemple : un modèle fine-tuné sur des docs juridiques comprendra mieux "clause résolutoire" qu'un modèle générique</p>
+</section>
+
+<section>
+    <h2>Évaluation : métriques RAGAS</h2>
+    <table style="font-size:0.65em;">
+        <tr><th>Métrique</th><th>Mesure</th><th>Question</th></tr>
+        <tr><td><strong>Faithfulness</strong></td><td>La réponse est-elle fidèle au contexte ?</td><td>Pas d'hallucination ?</td></tr>
+        <tr><td><strong>Answer Relevancy</strong></td><td>La réponse est-elle pertinente ?</td><td>Répond à la question ?</td></tr>
+        <tr><td><strong>Context Precision</strong></td><td>Les bons chunks sont-ils en haut ?</td><td>Le retrieval est-il bon ?</td></tr>
+        <tr><td><strong>Context Recall</strong></td><td>Tous les éléments nécessaires sont-ils trouvés ?</td><td>Rien n'est manqué ?</td></tr>
+    </table>
+    <p class="fragment" style="font-size:0.7em;color:#718096;margin-top:15px;">Framework RAGAS : évalue automatiquement votre pipeline RAG avec un LLM</p>
+</section>
+
+<section>
+    <h2>Multi-modal RAG et Agents</h2>
+    <div class="columns">
+        <div class="box">
+            <h3 style="font-size:0.9em;">Multi-modal RAG</h3>
+            <ul style="font-size:0.65em;">
+                <li>Images : embeddings visuels (CLIP)</li>
+                <li>Audio : transcription + RAG texte</li>
+                <li>Tableaux : parsing structuré</li>
+                <li>Vidéo : extraction de keyframes</li>
+            </ul>
+        </div>
+        <div class="box">
+            <h3 style="font-size:0.9em;">Agents + RAG</h3>
+            <ul style="font-size:0.65em;">
+                <li>L'agent décide quand chercher</li>
+                <li>Reformule la query si pas de résultat</li>
+                <li>Combine plusieurs sources</li>
+                <li>Peut appeler des outils externes</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 8 : RÉCAPITULATIF                                     -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <h2 style="color: white;">Section 8</h2>
+    <h3 style="color: rgba(255,255,255,0.85);">Récapitulatif</h3>
+</section>
+
+<section>
+    <h2>Le RAG en un schéma</h2>
+    <svg viewBox="0 0 750 400" style="width:95%;margin:0 auto;display:block;">
+        <defs><marker id="arrow7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/></marker></defs>
+        <!-- Title: Ingestion (top) -->
+        <text x="375" y="20" text-anchor="middle" font-size="15" font-weight="bold" fill="#805ad5">Pipeline d'ingestion (une fois par document)</text>
+        <rect x="20" y="35" width="710" height="75" rx="10" fill="#faf5ff" stroke="#805ad5" stroke-width="1.5" stroke-dasharray="6,4"/>
+        <rect x="40" y="50" width="120" height="45" rx="6" fill="#fed7d7" stroke="#e53e3e" stroke-width="1.5"/>
+        <text x="100" y="78" text-anchor="middle" font-size="12" fill="#9b2c2c">Parse</text>
+        <line x1="160" y1="72" x2="195" y2="72" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow7)"/>
+        <rect x="195" y="50" width="120" height="45" rx="6" fill="#fefcbf" stroke="#d69e2e" stroke-width="1.5"/>
+        <text x="255" y="78" text-anchor="middle" font-size="12" fill="#744210">Chunk</text>
+        <line x1="315" y1="72" x2="355" y2="72" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow7)"/>
+        <rect x="355" y="50" width="120" height="45" rx="6" fill="#c6f6d5" stroke="#38a169" stroke-width="1.5"/>
+        <text x="415" y="78" text-anchor="middle" font-size="12" fill="#276749">Embed</text>
+        <line x1="475" y1="72" x2="515" y2="72" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow7)"/>
+        <rect x="515" y="50" width="120" height="45" rx="6" fill="#e9d8fd" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="575" y="78" text-anchor="middle" font-size="12" fill="#553c9a">Store</text>
+        <!-- ChromaDB central -->
+        <rect x="280" y="155" width="190" height="60" rx="10" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <text x="375" y="180" text-anchor="middle" font-size="14" font-weight="bold" fill="#553c9a">ChromaDB</text>
+        <text x="375" y="200" text-anchor="middle" font-size="11" fill="#553c9a">Base vectorielle</text>
+        <line x1="575" y1="95" x2="470" y2="155" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arrow7)"/>
+        <!-- Title: Query (bottom) -->
+        <text x="375" y="250" text-anchor="middle" font-size="15" font-weight="bold" fill="#3182ce">Pipeline de query (à chaque question)</text>
+        <rect x="20" y="265" width="710" height="120" rx="10" fill="#ebf8ff" stroke="#3182ce" stroke-width="1.5" stroke-dasharray="6,4"/>
+        <rect x="40" y="280" width="130" height="45" rx="6" fill="#ebf8ff" stroke="#3182ce" stroke-width="1.5"/>
+        <text x="105" y="300" text-anchor="middle" font-size="11" fill="#2b6cb0">Question</text>
+        <text x="105" y="315" text-anchor="middle" font-size="9" fill="#4a5568">embed_query()</text>
+        <line x1="170" y1="302" x2="210" y2="302" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow7)"/>
+        <rect x="210" y="280" width="130" height="45" rx="6" fill="#c6f6d5" stroke="#38a169" stroke-width="1.5"/>
+        <text x="275" y="300" text-anchor="middle" font-size="11" fill="#276749">Recherche</text>
+        <text x="275" y="315" text-anchor="middle" font-size="9" fill="#4a5568">similarité cosinus</text>
+        <line x1="275" y1="280" x2="310" y2="215" stroke="#38a169" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <line x1="340" y1="302" x2="380" y2="302" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow7)"/>
+        <rect x="380" y="280" width="130" height="45" rx="6" fill="#fed7e2" stroke="#d53f8c" stroke-width="1.5"/>
+        <text x="445" y="300" text-anchor="middle" font-size="11" fill="#97266d">Prompt</text>
+        <text x="445" y="315" text-anchor="middle" font-size="9" fill="#4a5568">context + question</text>
+        <line x1="510" y1="302" x2="550" y2="302" stroke="#718096" stroke-width="1.5" marker-end="url(#arrow7)"/>
+        <rect x="550" y="280" width="130" height="45" rx="6" fill="#fed7d7" stroke="#e53e3e" stroke-width="1.5"/>
+        <text x="615" y="300" text-anchor="middle" font-size="11" fill="#9b2c2c">Claude</text>
+        <text x="615" y="315" text-anchor="middle" font-size="9" fill="#4a5568">Génération</text>
+        <text x="375" y="370" text-anchor="middle" font-size="12" fill="#718096">Le RAG = chercher les bons documents AVANT de répondre</text>
+    </svg>
+</section>
+
+<section>
+    <h2>Ressources</h2>
+    <div style="font-size:0.75em;text-align:left;">
+        <div class="box" style="margin-bottom:10px;">
+            <h3 style="font-size:0.9em;">Documentation</h3>
+            <ul>
+                <li>Anthropic : <code>docs.anthropic.com</code></li>
+                <li>ChromaDB : <code>docs.trychroma.com</code></li>
+                <li>Sentence-Transformers : <code>sbert.net</code></li>
+                <li>FastAPI : <code>fastapi.tiangolo.com</code></li>
+                <li>LangChain Text Splitters : <code>python.langchain.com</code></li>
+            </ul>
+        </div>
+        <div class="box">
+            <h3 style="font-size:0.9em;">Pour approfondir</h3>
+            <ul>
+                <li>RAGAS (évaluation) : <code>docs.ragas.io</code></li>
+                <li>"Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks" (paper original, 2020)</li>
+                <li>Hugging Face MTEB Leaderboard (classement des modèles d'embedding)</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h1>Merci !</h1>
+    <p style="margin-top:30px;color:#718096;">Des questions ?</p>
+    <div style="margin-top:50px;font-size:0.7em;color:#a0aec0;">
+        <p>Le code source complet est dans le dossier du projet</p>
+        <p>Lancez <code>uvicorn src.main:app --reload</code> pour tester</p>
+    </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script>
+    Reveal.initialize({
+        hash: true,
+        slideNumber: true,
+        transition: 'slide',
+        plugins: [RevealHighlight, RevealNotes],
+        highlight: {
+            highlightOnLoad: true
+        }
+    });
+</script>
+</body>
+</html>

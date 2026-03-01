@@ -35,6 +35,7 @@ themeToggle.addEventListener("click", () => {
     const next = current === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     localStorage.setItem("theme", next);
+    syncHljsTheme();
 });
 
 // ── Upload ──────────────────────────────────────────────────────────────────
@@ -166,7 +167,7 @@ queryForm.addEventListener("submit", async (e) => {
 
         const data = await resp.json();
 
-        answerContent.textContent = data.answer;
+        answerContent.innerHTML = renderMarkdown(data.answer);
         answerMeta.textContent = `Model: ${data.model} | Latency: ${data.latency_ms.toFixed(0)} ms`;
         sourceCount.textContent = data.sources.length;
 
@@ -189,6 +190,23 @@ queryForm.addEventListener("submit", async (e) => {
     }
 });
 
+// ── Markdown rendering ──────────────────────────────────────────────────────
+
+marked.setOptions({
+    highlight: function (code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+        }
+        return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true,
+});
+
+function renderMarkdown(text) {
+    return marked.parse(text);
+}
+
 // ── Utils ───────────────────────────────────────────────────────────────────
 
 function escapeHtml(str) {
@@ -197,7 +215,14 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function syncHljsTheme() {
+    const theme = document.documentElement.getAttribute("data-theme");
+    document.getElementById("hljs-light").disabled = theme === "dark";
+    document.getElementById("hljs-dark").disabled = theme !== "dark";
+}
+
 // ── Init ────────────────────────────────────────────────────────────────────
 
 initTheme();
+syncHljsTheme();
 refreshDocuments();
