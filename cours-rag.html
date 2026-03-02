@@ -61,38 +61,68 @@
 <section>
     <h2>Objectifs du cours</h2>
     <ul>
-        <li class="fragment">Comprendre pourquoi les LLMs seuls ne suffisent pas</li>
-        <li class="fragment">Maîtriser le pipeline <strong>Parse &rarr; Chunk &rarr; Embed &rarr; Store</strong></li>
-        <li class="fragment">Savoir ce qu'est un <strong>embedding</strong> et une <strong>base vectorielle</strong></li>
-        <li class="fragment">Assembler un pipeline RAG complet avec <strong>Claude</strong></li>
-        <li class="fragment">Exposer le tout via une <strong>API REST</strong> avec FastAPI</li>
+        <li class="fragment">Comprendre pourquoi les <strong>modèles de langage</strong> (LLMs) seuls ne suffisent pas</li>
+        <li class="fragment">Apprendre à préparer des documents pour qu'une IA puisse les utiliser</li>
+        <li class="fragment">Comprendre comment une IA peut "chercher" dans vos documents</li>
+        <li class="fragment">Construire un système RAG complet, étape par étape</li>
+        <li class="fragment">Rendre le tout accessible via une <strong>application web</strong></li>
     </ul>
 </section>
 
 <section>
+    <h2>Glossaire : les mots-clés du cours</h2>
+    <p style="font-size:0.7em;color:#718096;margin-bottom:15px;">Tous ces termes seront expliqués en détail au fil du cours. Cette page sert de référence rapide.</p>
+    <div class="columns">
+        <div>
+            <table style="font-size:0.55em;">
+                <tr><th>Terme</th><th>Définition simple</th></tr>
+                <tr><td><strong>LLM</strong></td><td><em>Large Language Model</em> — un programme d'IA capable de comprendre et générer du texte (ex : ChatGPT, Claude)</td></tr>
+                <tr><td><strong>RAG</strong></td><td><em>Retrieval-Augmented Generation</em> — technique qui consiste à chercher des infos dans vos documents AVANT de demander à l'IA de répondre</td></tr>
+                <tr><td><strong>Token</strong></td><td>Un morceau de mot. Les LLMs ne lisent pas des mots entiers : ils découpent le texte en petits fragments appelés tokens</td></tr>
+                <tr><td><strong>Prompt</strong></td><td>Le texte qu'on envoie à l'IA — sa "consigne" + la question de l'utilisateur</td></tr>
+                <tr><td><strong>Embedding</strong></td><td>Une liste de nombres qui représente le <em>sens</em> d'un texte. Permet de comparer des textes entre eux mathématiquement</td></tr>
+                <tr><td><strong>Vecteur</strong></td><td>Synonyme d'embedding — une liste ordonnée de nombres (ex : [0.2, -0.5, 0.8])</td></tr>
+            </table>
+        </div>
+        <div>
+            <table style="font-size:0.55em;">
+                <tr><th>Terme</th><th>Définition simple</th></tr>
+                <tr><td><strong>Chunk</strong></td><td>Un morceau de document. On découpe les documents en petits bouts pour pouvoir chercher précisément dedans</td></tr>
+                <tr><td><strong>Base vectorielle</strong></td><td>Une base de données spécialisée qui stocke des vecteurs et permet de chercher par <em>similarité de sens</em></td></tr>
+                <tr><td><strong>Pipeline</strong></td><td>Une chaîne d'étapes automatisées. Chaque étape prend le résultat de la précédente (comme une chaîne de montage)</td></tr>
+                <tr><td><strong>API</strong></td><td><em>Application Programming Interface</em> — un "guichet" qui permet à des programmes de communiquer entre eux via Internet</td></tr>
+                <tr><td><strong>Modèle</strong></td><td>Un programme d'IA entraîné sur des données. Il en existe pour générer du texte (LLM) ou pour créer des embeddings</td></tr>
+                <tr><td><strong>System prompt</strong></td><td>Les instructions cachées données à l'IA avant la question de l'utilisateur — c'est là qu'on définit son comportement</td></tr>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section>
     <h2>Le projet fil rouge</h2>
+    <p style="font-size:0.7em;color:#718096;margin-bottom:10px;">Voici l'organisation du code qu'on va construire ensemble. Pas de panique si ces noms ne vous parlent pas encore — chaque fichier sera expliqué en détail dans la section correspondante.</p>
     <div class="small-code">
     <pre><code class="language-bash" data-trim>
 Rag/
 ├── src/
 │   ├── api/
-│   │   └── routes.py          # Endpoints REST
+│   │   └── routes.py          # Le "guichet" web (reçoit les requêtes)
 │   ├── core/
-│   │   └── config.py          # Configuration YAML + env
-│   ├── ingestion/
-│   │   ├── parser.py          # Extraction de texte (PDF, DOCX, TXT)
-│   │   ├── chunker.py         # Découpage en chunks
-│   │   └── pipeline.py        # Orchestration du pipeline
-│   ├── retrieval/
-│   │   ├── embeddings.py      # Modèle d'embeddings
-│   │   ├── vector_store.py    # Base vectorielle ChromaDB
-│   │   └── rag_engine.py      # Moteur RAG (retrieve + generate)
+│   │   └── config.py          # Les réglages de l'application
+│   ├── ingestion/             # PRÉPARER les documents
+│   │   ├── parser.py          # Lire les fichiers (PDF, Word, texte)
+│   │   ├── chunker.py         # Découper en petits morceaux
+│   │   └── pipeline.py        # Enchaîner toutes les étapes
+│   ├── retrieval/             # CHERCHER et RÉPONDRE
+│   │   ├── embeddings.py      # Transformer le texte en nombres
+│   │   ├── vector_store.py    # La base de données spécialisée
+│   │   └── rag_engine.py      # Le cerveau : chercher puis répondre
 │   └── models/
-│       └── schemas.py         # Schémas Pydantic
+│       └── schemas.py         # La structure des données échangées
 ├── config/
-│   └── settings.yaml          # Paramètres de l'application
+│   └── settings.yaml          # Les paramètres (taille des morceaux, etc.)
 └── templates/
-    └── index.html             # Interface web
+    └── index.html             # L'interface utilisateur (page web)
     </code></pre>
     </div>
 </section>
@@ -101,11 +131,11 @@ Rag/
     <h2>Pourquoi RAG ?</h2>
     <div class="columns">
         <div class="box box-red">
-            <h3>Problèmes des LLMs</h3>
+            <h3>Problèmes des IAs de langage</h3>
             <ul style="font-size: 0.8em;">
-                <li class="fragment"><strong>Hallucinations</strong> : inventent des réponses</li>
-                <li class="fragment"><strong>Données privées</strong> : n'ont pas accès à vos docs</li>
-                <li class="fragment"><strong>Fraîcheur</strong> : entraînés à une date fixe</li>
+                <li class="fragment"><strong>Hallucinations</strong> : elles inventent des réponses quand elles ne savent pas</li>
+                <li class="fragment"><strong>Données privées</strong> : elles n'ont jamais vu les documents de votre entreprise</li>
+                <li class="fragment"><strong>Fraîcheur</strong> : leur connaissance s'arrête à leur date d'entraînement</li>
             </ul>
         </div>
         <div class="box box-green fragment">
@@ -126,6 +156,9 @@ Rag/
 
 <section>
     <h2>Comment fonctionne un LLM ?</h2>
+    <div class="box box-blue" style="margin-bottom:15px;">
+        <p style="font-size:0.8em;"><strong>LLM</strong> = <em>Large Language Model</em> (grand modèle de langage). C'est un programme d'IA entraîné sur des milliards de textes (livres, sites web, articles...) pour apprendre à manipuler le langage. Exemples : ChatGPT, Claude, Gemini.</p>
+    </div>
     <div class="box">
         <p><strong>Le principe :</strong> prédire le prochain mot (token) le plus probable</p>
     </div>
@@ -139,7 +172,7 @@ Rag/
             <tr><td>sol</td><td>12%</td></tr>
         </table>
     </div>
-    <p class="fragment" style="font-size: 0.7em; color: #718096; margin-top: 20px;">Un LLM ne "comprend" pas — il calcule des probabilités sur des séquences de tokens</p>
+    <p class="fragment" style="font-size: 0.7em; color: #718096; margin-top: 20px;">Un LLM ne "comprend" pas vraiment — il calcule des probabilités sur des séquences de mots. Mais comment lit-il ces mots exactement ? C'est ce qu'on va voir avec la <strong>tokenisation</strong>.</p>
 </section>
 
 <section>
@@ -163,18 +196,21 @@ Rag/
 
 <section>
     <h2>La fenêtre de contexte</h2>
+    <p style="font-size:0.7em;color:#718096;margin-bottom:10px;">Un LLM ne peut lire qu'une quantité limitée de texte à la fois. C'est sa <strong>fenêtre de contexte</strong> : tout ce qu'il "voit" pour formuler sa réponse.</p>
     <svg viewBox="0 0 700 250" style="width:90%;margin:20px auto;display:block;">
         <rect x="10" y="30" width="680" height="60" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="2"/>
-        <text x="350" y="67" text-anchor="middle" font-size="16" fill="#2d3748">Fenêtre de contexte = System prompt + Conversation + Réponse</text>
-        <rect x="10" y="120" width="200" height="50" rx="8" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
-        <text x="110" y="150" text-anchor="middle" font-size="14" fill="#553c9a">System prompt</text>
-        <rect x="220" y="120" width="300" height="50" rx="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
-        <text x="370" y="150" text-anchor="middle" font-size="14" fill="#276749">Messages (user + assistant)</text>
-        <rect x="530" y="120" width="160" height="50" rx="8" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
-        <text x="610" y="150" text-anchor="middle" font-size="14" fill="#9b2c2c">Réponse</text>
-        <text x="350" y="210" text-anchor="middle" font-size="14" fill="#718096">Claude : 200K tokens (~150K mots) — mais plus on en met, plus c'est lent et coûteux</text>
+        <text x="350" y="67" text-anchor="middle" font-size="16" fill="#2d3748">Fenêtre de contexte = Instructions + Conversation + Réponse</text>
+        <rect x="10" y="120" width="200" height="70" rx="8" fill="#e9d8fd" stroke="#805ad5" stroke-width="2"/>
+        <text x="110" y="145" text-anchor="middle" font-size="14" fill="#553c9a">Instructions cachées</text>
+        <text x="110" y="165" text-anchor="middle" font-size="10" fill="#805ad5">(= "system prompt")</text>
+        <rect x="220" y="120" width="300" height="70" rx="8" fill="#c6f6d5" stroke="#38a169" stroke-width="2"/>
+        <text x="370" y="145" text-anchor="middle" font-size="14" fill="#276749">Messages</text>
+        <text x="370" y="165" text-anchor="middle" font-size="10" fill="#38a169">(questions + réponses)</text>
+        <rect x="530" y="120" width="160" height="70" rx="8" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
+        <text x="610" y="155" text-anchor="middle" font-size="14" fill="#9b2c2c">Réponse</text>
+        <text x="350" y="230" text-anchor="middle" font-size="14" fill="#718096">Claude : 200K tokens (~150K mots) — mais plus on en met, plus c'est lent et coûteux</text>
     </svg>
-    <p class="fragment" style="font-size: 0.75em;">On ne peut pas copier-coller 10 000 documents dans le prompt !</p>
+    <p class="fragment" style="font-size: 0.75em;">On ne peut pas copier-coller 10 000 documents dans le prompt ! C'est pour ça qu'on a besoin du RAG.</p>
 </section>
 
 <section>
@@ -261,6 +297,7 @@ Rag/
 
 <section>
     <h2>Vue d'ensemble du pipeline</h2>
+    <p style="font-size:0.7em;color:#718096;margin-bottom:10px;">Avant de pouvoir chercher dans vos documents, il faut les <strong>préparer</strong>. C'est comme organiser une bibliothèque : on ne jette pas les livres en vrac — on les classe, on les indexe. Voici les 4 étapes de cette préparation :</p>
     <svg viewBox="0 0 750 200" style="width:95%;margin:20px auto;display:block;">
         <rect x="10" y="40" width="140" height="70" rx="10" fill="#fed7d7" stroke="#e53e3e" stroke-width="2"/>
         <text x="80" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="#9b2c2c">1. Parse</text>
@@ -358,6 +395,7 @@ def _parse_pdf(content: bytes) -> str:
 
 <section>
     <h2>Pourquoi découper en chunks ?</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:10px;">OK, on a extrait le texte brut de nos fichiers. Mais un PDF peut faire 50 pages ! On ne peut pas envoyer tout ça à l'IA. Il faut découper le texte en petits morceaux (<strong>chunks</strong>) pour pouvoir chercher précisément dedans.</p>
     <div class="columns">
         <div class="box">
             <h3>Analogie</h3>
@@ -402,7 +440,7 @@ def chunk_text(text, document_id, metadata=None):
     </code></pre>
     </div>
     <p class="fragment" style="font-size:0.7em;color:#718096;">
-        <strong>Récursif</strong> = essaie d'abord de couper aux paragraphes (<code>\n\n</code>), puis aux lignes (<code>\n</code>), puis aux phrases (<code>. </code>), puis aux espaces (<code> </code>)
+        Pourquoi <strong>"récursif"</strong> ? L'algorithme essaie de couper intelligemment : d'abord entre les <strong>paragraphes</strong> (<code>\n\n</code>), si ça ne suffit pas, entre les <strong>lignes</strong> (<code>\n</code>), puis les <strong>phrases</strong> (<code>. </code>), et en dernier recours, entre les <strong>mots</strong> (<code> </code>). Ainsi, on évite de couper au milieu d'une idée.
     </p>
 </section>
 
@@ -541,23 +579,26 @@ for idx, raw in enumerate(raw_chunks):
 </section>
 
 <section>
-    <h2>Le modèle all-MiniLM-L6-v2</h2>
-    <table style="font-size:0.7em;">
-        <tr><th>Propriété</th><th>Valeur</th></tr>
-        <tr><td>Dimensions</td><td><strong>384</strong></td></tr>
-        <tr><td>Taille du modèle</td><td>~80 MB</td></tr>
-        <tr><td>Vitesse</td><td>~14 000 phrases/sec (GPU)</td></tr>
-        <tr><td>Longueur max</td><td>256 tokens</td></tr>
-        <tr><td>Entraîné sur</td><td>1 milliard de paires de phrases</td></tr>
-        <tr><td>Langue</td><td>Multilingue (dont le français)</td></tr>
+    <h2>Quel modèle pour créer les embeddings ?</h2>
+    <div class="box box-blue" style="margin-bottom:15px;">
+        <p style="font-size:0.75em;">On a besoin d'un <strong>modèle d'embedding</strong> : un programme spécialisé qui sait transformer du texte en vecteurs. Ce n'est pas le même programme que le LLM qui génère les réponses — c'est un outil plus petit et plus rapide, dédié à cette seule tâche.</p>
+    </div>
+    <p style="font-size:0.8em;">Notre choix : <strong>all-MiniLM-L6-v2</strong></p>
+    <table style="font-size:0.65em;">
+        <tr><th>Propriété</th><th>Valeur</th><th>Pourquoi c'est important</th></tr>
+        <tr><td>Dimensions</td><td><strong>384</strong></td><td>Chaque texte devient une liste de 384 nombres</td></tr>
+        <tr><td>Taille</td><td>~80 MB</td><td>Assez petit pour tourner sur un PC normal</td></tr>
+        <tr><td>Vitesse</td><td>~14 000 phrases/sec</td><td>Très rapide, même sans carte graphique puissante</td></tr>
+        <tr><td>Langue</td><td>Multilingue</td><td>Comprend le français (et beaucoup d'autres langues)</td></tr>
     </table>
-    <div class="fragment box" style="margin-top:15px;">
-        <p style="font-size:0.75em;">Choisi pour notre projet car : <strong>léger</strong>, <strong>rapide</strong>, <strong>gratuit</strong>, tourne en local sans GPU</p>
+    <div class="fragment box box-green" style="margin-top:10px;">
+        <p style="font-size:0.75em;">Choisi car : <strong>gratuit</strong>, <strong>rapide</strong>, <strong>tourne en local</strong> (pas besoin d'Internet ni de GPU). Parfait pour apprendre et prototyper.</p>
     </div>
 </section>
 
 <section>
     <h2>Sentence-Transformers</h2>
+    <p style="font-size:0.7em;color:#718096;margin-bottom:10px;"><strong>Sentence-Transformers</strong> est une bibliothèque Python (gratuite et open-source) qui fournit des modèles d'embedding prêts à l'emploi. On l'utilise pour charger le modèle et transformer nos textes en vecteurs.</p>
     <div class="small-code">
     <pre><code class="language-python" data-trim data-line-numbers="1-4|6-11|13-16|18-21">
 # src/retrieval/embeddings.py
@@ -589,16 +630,20 @@ def embed_query(query: str) -> list[float]:
 <section>
     <h2>Pourquoi normaliser ?</h2>
     <div class="box">
-        <p style="font-size:0.8em;"><code>normalize_embeddings=True</code> rend tous les vecteurs de <strong>norme 1</strong></p>
+        <p style="font-size:0.8em;"><code>normalize_embeddings=True</code> met tous les vecteurs à la <strong>même échelle</strong></p>
     </div>
-    <div class="fragment" style="margin-top:15px;">
-        <p style="font-size:0.8em;">Avantage : la <strong>distance cosinus</strong> devient un simple <strong>produit scalaire</strong></p>
-        <p style="font-size:0.7em;color:#718096;">Calcul beaucoup plus rapide pour la recherche !</p>
+    <div class="fragment box box-green" style="margin-top:15px;">
+        <p style="font-size:0.8em;"><strong>Analogie :</strong> imaginons qu'on compare des notes d'étudiants. Si un prof note sur 20 et un autre sur 100, les chiffres bruts ne sont pas comparables. La normalisation revient à tout mettre sur la même échelle (par exemple sur 1).</p>
+    </div>
+    <div class="fragment" style="margin-top:10px;">
+        <p style="font-size:0.75em;">Avantage technique : les calculs de comparaison deviennent beaucoup <strong>plus rapides</strong></p>
+        <p style="font-size:0.65em;color:#718096;">(Pour les curieux : la distance cosinus se simplifie en un produit scalaire, une opération très rapide pour l'ordinateur)</p>
     </div>
 </section>
 
 <section>
     <h2>Similarité cosinus</h2>
+    <p style="font-size:0.7em;color:#718096;margin-bottom:5px;">Comment mesure-t-on si deux textes sont "proches" ? On regarde l'<strong>angle</strong> entre leurs vecteurs. Plus l'angle est petit, plus les textes parlent de la même chose.</p>
     <svg viewBox="0 0 650 300" style="width:85%;margin:10px auto;display:block;">
         <!-- Axes -->
         <line x1="100" y1="250" x2="400" y2="250" stroke="#cbd5e0" stroke-width="1.5"/>
@@ -629,23 +674,22 @@ def embed_query(query: str) -> list[float]:
 </section>
 
 <section>
-    <h2>Cosinus vs Euclidienne</h2>
+    <h2>Pourquoi le cosinus et pas la distance "classique" ?</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:10px;">Il existe plusieurs façons de mesurer si deux vecteurs sont proches. Comparons les deux principales :</p>
     <div class="columns">
         <div class="box box-blue">
             <h3>Distance Euclidienne</h3>
-            <p style="font-size:0.7em;">Mesure la <strong>distance absolue</strong> entre deux points</p>
-            <p style="font-size:0.65em;color:#718096;">Sensible à la longueur des vecteurs</p>
-            <p style="font-size:0.65em;">Un texte long et un texte court sur le même sujet peuvent sembler "loin"</p>
+            <p style="font-size:0.68em;">Comme mesurer la distance entre deux points sur une carte, en ligne droite</p>
+            <p style="font-size:0.65em;color:#e53e3e;">Problème : un texte long et un texte court sur le même sujet peuvent sembler "loin" l'un de l'autre</p>
         </div>
         <div class="box box-green">
             <h3>Similarité Cosinus</h3>
-            <p style="font-size:0.7em;">Mesure l'<strong>angle</strong> entre deux vecteurs</p>
-            <p style="font-size:0.65em;color:#718096;">Insensible à la longueur</p>
-            <p style="font-size:0.65em;">Deux textes sur le même sujet sont "proches" quelle que soit leur taille</p>
+            <p style="font-size:0.68em;">Compare la <strong>direction</strong> des vecteurs, pas leur taille</p>
+            <p style="font-size:0.65em;color:#38a169;">Avantage : deux textes sur le même sujet sont "proches" quelle que soit leur longueur</p>
         </div>
     </div>
     <div class="fragment box" style="text-align:center;margin-top:15px;">
-        <p style="font-size:0.8em;">C'est pourquoi ChromaDB utilise <code>"hnsw:space": "cosine"</code></p>
+        <p style="font-size:0.8em;">C'est pourquoi notre base de données utilise le cosinus : on cherche des textes qui <strong>parlent de la même chose</strong>, pas des textes de même longueur</p>
     </div>
 </section>
 
@@ -732,8 +776,8 @@ store.search("Quel est le budget ?")
 </section>
 
 <section>
-    <h2>L'algorithme HNSW</h2>
-    <p style="font-size:0.75em;">Hierarchical Navigable Small World</p>
+    <h2>Comment ChromaDB cherche si vite ?</h2>
+    <p style="font-size:0.7em;color:#718096;">Avec des millions de vecteurs, comparer la question à chacun d'eux serait trop lent. ChromaDB utilise un algorithme malin appelé <strong>HNSW</strong> (<em>Hierarchical Navigable Small World</em>) pour trouver les vecteurs les plus proches sans tout parcourir.</p>
     <svg viewBox="0 0 650 320" style="width:85%;margin:10px auto;display:block;">
         <!-- Layer 2 (top) -->
         <text x="30" y="50" font-size="12" fill="#805ad5">Couche 2</text>
@@ -769,13 +813,14 @@ store.search("Quel est le budget ?")
         <line x1="348" y1="235" x2="412" y2="235" stroke="#38a169" stroke-width="1.5"/>
         <line x1="428" y1="235" x2="492" y2="235" stroke="#38a169" stroke-width="1.5"/>
         <line x1="508" y1="235" x2="572" y2="235" stroke="#38a169" stroke-width="1.5"/>
-        <text x="325" y="295" text-anchor="middle" font-size="12" fill="#718096">On commence en haut (vue grossière) et on descend (vue précise)</text>
-        <text x="325" y="315" text-anchor="middle" font-size="12" fill="#a0aec0">Complexité : O(log n) au lieu de O(n) pour un scan complet</text>
+        <text x="325" y="295" text-anchor="middle" font-size="12" fill="#718096">Comme un GPS : on zoome d'abord sur la région, puis la ville, puis la rue</text>
+        <text x="325" y="315" text-anchor="middle" font-size="12" fill="#a0aec0">Résultat : on trouve le bon vecteur en quelques sauts, même parmi des millions</text>
     </svg>
 </section>
 
 <section>
     <h2>ChromaDB : initialisation</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:8px;"><strong>ChromaDB</strong> est une base de données vectorielle open-source et gratuite. Une <strong>collection</strong> dans ChromaDB, c'est comme une "table" dans une base de données classique : elle regroupe un ensemble de vecteurs.</p>
     <div class="small-code">
     <pre><code class="language-python" data-trim data-line-numbers="1-4|6-16">
 # src/retrieval/vector_store.py
@@ -860,6 +905,7 @@ def search(self, query, top_k=5, score_threshold=0.3):
 
 <section>
     <h2>Distance &rarr; Score de similarité</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:8px;">ChromaDB retourne une <strong>distance</strong> (plus c'est petit, plus c'est proche). On la convertit en <strong>score</strong> (plus c'est grand, plus c'est pertinent) pour que ce soit plus intuitif :</p>
     <div class="box">
         <p><code>score = 1.0 - distance_cosinus</code></p>
     </div>
@@ -876,7 +922,8 @@ def search(self, query, top_k=5, score_threshold=0.3):
 </section>
 
 <section>
-    <h2>Top-K et score_threshold</h2>
+    <h2>Combien de résultats garder ?</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:8px;">Deux paramètres contrôlent le nombre de chunks retournés : <strong>top_k</strong> (maximum de résultats) et <strong>score_threshold</strong> (score minimum pour être gardé). On les configure dans le fichier de réglages :</p>
     <div class="small-code">
     <pre><code class="language-yaml" data-trim>
 # config/settings.yaml
@@ -998,6 +1045,7 @@ def _build_context_block(sources: list[SourceDocument]) -> str:
 
 <section>
     <h2>Le System Prompt</h2>
+    <p style="font-size:0.7em;color:#718096;margin-bottom:8px;">Le <strong>system prompt</strong>, c'est le "briefing" qu'on donne à l'IA avant qu'elle ne voie la question de l'utilisateur. C'est là qu'on lui dit <em>comment</em> elle doit se comporter : être factuelle, citer ses sources, ne pas inventer. L'utilisateur ne voit pas ce texte.</p>
     <div class="small-code">
     <pre><code class="language-python" data-trim>
 # src/retrieval/rag_engine.py
@@ -1049,6 +1097,7 @@ if sources:
 
 <section>
     <h2>Étape 4 : Génération par Claude</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:8px;">Maintenant qu'on a le contexte (les bons chunks) et la question, on envoie le tout à Claude via son API (un service web fourni par Anthropic). Claude lit le contexte et formule une réponse.</p>
     <div class="small-code">
     <pre><code class="language-python" data-trim data-line-numbers="1-3|5-12|14-15">
 # src/retrieval/rag_engine.py
@@ -1067,16 +1116,16 @@ answer = response.content[0].text
     </div>
     <div class="fragment" style="margin-top:15px;">
         <table style="font-size:0.65em;">
-            <tr><th>Paramètre</th><th>Valeur</th><th>Pourquoi</th></tr>
-            <tr><td>temperature</td><td>0.1</td><td>Réponses factuelles, peu de créativité</td></tr>
-            <tr><td>max_tokens</td><td>4096</td><td>Réponses assez longues si nécessaire</td></tr>
-            <tr><td>model</td><td>claude-sonnet</td><td>Bon compromis coût/qualité</td></tr>
+            <tr><th>Paramètre</th><th>Valeur</th><th>En clair</th></tr>
+            <tr><td>temperature</td><td>0.1</td><td>Proche de 0 = réponses prévisibles et factuelles. Proche de 1 = réponses plus créatives et variées. Ici on veut du factuel.</td></tr>
+            <tr><td>max_tokens</td><td>4096</td><td>Longueur maximale de la réponse (~3000 mots). On laisse de la place pour des réponses détaillées.</td></tr>
+            <tr><td>model</td><td>claude-sonnet</td><td>Le modèle de Claude. "Sonnet" est le bon compromis entre qualité et coût (moins cher qu'"Opus", plus performant qu'"Haiku").</td></tr>
         </table>
     </div>
 </section>
 
 <section>
-    <h2>Fallback sans clé API</h2>
+    <h2>Et si on n'a pas de clé API ?</h2>
     <div class="small-code">
     <pre><code class="language-python" data-trim>
 # src/retrieval/rag_engine.py
@@ -1098,7 +1147,7 @@ if not api_key:
     )
     </code></pre>
     </div>
-    <p class="fragment" style="font-size:0.7em;color:#718096;">Le système reste utilisable même sans clé API : on voit les chunks retrouvés</p>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">Une <strong>clé API</strong> est un mot de passe qui autorise votre programme à utiliser le service Claude (payant). Sans elle, le système montre quand même les chunks trouvés — utile pour tester la recherche !</p>
 </section>
 
 <section>
@@ -1157,14 +1206,16 @@ return QueryResponse(
 
 <section>
     <h2>Pourquoi FastAPI ?</h2>
+    <div class="box" style="font-size:0.7em;margin-bottom:15px;">
+        <p>Pour que notre système RAG soit utilisable par d'autres programmes (ou une page web), on a besoin d'un <strong>serveur web</strong> qui expose des "guichets" (des <strong>endpoints</strong>). <strong>FastAPI</strong> est un framework Python qui permet de créer ces guichets très facilement.</p>
+    </div>
     <div class="columns">
         <div>
             <ul style="font-size:0.75em;">
-                <li class="fragment"><strong>Async</strong> natif (requêtes concurrentes)</li>
-                <li class="fragment"><strong>Validation</strong> automatique avec Pydantic</li>
-                <li class="fragment"><strong>Documentation</strong> auto (Swagger UI)</li>
-                <li class="fragment"><strong>Type hints</strong> Python</li>
-                <li class="fragment"><strong>Performances</strong> comparables à Node.js</li>
+                <li class="fragment"><strong>Rapide</strong> : peut gérer plusieurs requêtes en parallèle (on dit "async")</li>
+                <li class="fragment"><strong>Sûr</strong> : vérifie automatiquement que les données reçues sont valides</li>
+                <li class="fragment"><strong>Documenté</strong> : génère une page de test interactive (Swagger UI)</li>
+                <li class="fragment"><strong>Pythonique</strong> : s'appuie sur les types Python qu'on connaît déjà</li>
             </ul>
         </div>
         <div class="fragment">
@@ -1184,22 +1235,24 @@ async def query_rag(request: QueryRequest):
 
 <section>
     <h2>Les routes REST</h2>
+    <p style="font-size:0.65em;color:#718096;margin-bottom:10px;">Chaque "route" est un guichet accessible via Internet. <strong>GET</strong> = demander des infos, <strong>POST</strong> = envoyer des données, <strong>DELETE</strong> = supprimer. C'est le standard du web.</p>
     <table style="font-size:0.6em;">
-        <tr><th>Méthode</th><th>Route</th><th>Description</th></tr>
-        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/health</code></td><td>État du système</td></tr>
-        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/metrics</code></td><td>Métriques Prometheus</td></tr>
-        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/auth/token</code></td><td>Obtenir un JWT</td></tr>
-        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/documents/upload</code></td><td>Upload un document</td></tr>
-        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/documents</code></td><td>Lister les documents</td></tr>
-        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/documents/{id}</code></td><td>Détail d'un document</td></tr>
+        <tr><th>Méthode</th><th>Route</th><th>Ce que ça fait</th></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/health</code></td><td>Vérifier que le serveur fonctionne</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/metrics</code></td><td>Statistiques d'utilisation (nombre de requêtes, temps de réponse...)</td></tr>
+        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/auth/token</code></td><td>S'authentifier (obtenir un jeton d'accès)</td></tr>
+        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/documents/upload</code></td><td>Envoyer un document (PDF, Word, texte)</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/documents</code></td><td>Lister tous les documents indexés</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/documents/{id}</code></td><td>Voir le détail d'un document</td></tr>
         <tr><td style="color:#e53e3e;font-weight:bold;">DELETE</td><td><code>/documents/{id}</code></td><td>Supprimer un document</td></tr>
-        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/query</code></td><td>Poser une question (RAG)</td></tr>
-        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/collections</code></td><td>Lister les collections</td></tr>
+        <tr><td style="color:#d69e2e;font-weight:bold;">POST</td><td><code>/query</code></td><td>Poser une question (le coeur du RAG !)</td></tr>
+        <tr><td style="color:#38a169;font-weight:bold;">GET</td><td><code>/collections</code></td><td>Voir les différentes collections de documents</td></tr>
     </table>
 </section>
 
 <section>
     <h2>Schémas Pydantic</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:8px;"><strong>Pydantic</strong> est une bibliothèque Python qui vérifie automatiquement la structure des données. On définit un "schéma" (= un formulaire) : quels champs on attend, de quel type, avec quelle valeur par défaut. Si quelqu'un envoie des données invalides, Pydantic rejette la requête avec un message d'erreur clair.</p>
     <div class="small-code">
     <pre><code class="language-python" data-trim>
 # src/models/schemas.py (simplifié)
@@ -1219,7 +1272,7 @@ class QueryResponse(BaseModel):
     latency_ms: float                 # Temps de réponse
     </code></pre>
     </div>
-    <p class="fragment" style="font-size:0.7em;color:#718096;">Pydantic valide automatiquement les types et génère la doc OpenAPI</p>
+    <p class="fragment" style="font-size:0.7em;color:#718096;">Si on envoie <code>top_k: "abc"</code> au lieu d'un nombre, Pydantic renverra une erreur avant même que notre code s'exécute</p>
 </section>
 
 <section>
@@ -1307,7 +1360,7 @@ async def query_rag(
     </code></pre>
     </div>
     <div class="fragment box" style="font-size:0.7em;">
-        <p><strong>Monitoring intégré</strong> : chaque requête est comptée et sa latence mesurée (Prometheus)</p>
+        <p><strong>Monitoring intégré</strong> : chaque requête est comptée et son temps de réponse mesuré. Ces statistiques sont exposées au format <strong>Prometheus</strong> (un outil standard de surveillance) pour pouvoir créer des tableaux de bord et des alertes.</p>
     </div>
 </section>
 
@@ -1323,8 +1376,9 @@ async def query_rag(
 
 <section>
     <h2>Reranking</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:8px;">Cette section présente des techniques avancées. Elles ne sont pas nécessaires pour un premier projet, mais utiles pour améliorer la qualité des résultats.</p>
     <div class="box">
-        <p style="font-size:0.8em;"><strong>Problème :</strong> la recherche vectorielle est rapide mais approximative</p>
+        <p style="font-size:0.8em;"><strong>Problème :</strong> la recherche vectorielle est rapide mais approximative — elle peut remonter des chunks qui ne sont pas les plus pertinents</p>
     </div>
     <div class="fragment" style="margin-top:15px;">
         <p style="font-size:0.8em;"><strong>Solution :</strong> un 2e modèle ré-ordonne les résultats avec plus de précision</p>
@@ -1348,10 +1402,11 @@ async def query_rag(
 
 <section>
     <h2>Recherche hybride</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:10px;">Notre recherche vectorielle comprend le sens, mais elle peut rater des documents contenant un mot-clé exact. La solution : combiner les deux approches.</p>
     <div class="columns">
         <div class="box">
             <h3 style="font-size:0.9em;">BM25 (mots-clés)</h3>
-            <p style="font-size:0.65em;">Recherche exacte par termes</p>
+            <p style="font-size:0.65em;">Comme un <code>Ctrl+F</code> intelligent : cherche les documents qui contiennent les mêmes mots</p>
             <p style="font-size:0.6em;color:#718096;">"budget Q3" &rarr; trouve les docs avec ces mots exacts</p>
         </div>
         <div style="display:flex;align-items:center;font-size:2em;color:#718096;">+</div>
@@ -1383,36 +1438,40 @@ async def query_rag(
 </section>
 
 <section>
-    <h2>Évaluation : métriques RAGAS</h2>
+    <h2>Comment savoir si notre RAG fonctionne bien ?</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:10px;"><strong>RAGAS</strong> est un outil qui évalue automatiquement la qualité de votre RAG en posant des questions et en analysant les réponses. Il mesure 4 critères :</p>
     <table style="font-size:0.65em;">
-        <tr><th>Métrique</th><th>Mesure</th><th>Question</th></tr>
-        <tr><td><strong>Faithfulness</strong></td><td>La réponse est-elle fidèle au contexte ?</td><td>Pas d'hallucination ?</td></tr>
-        <tr><td><strong>Answer Relevancy</strong></td><td>La réponse est-elle pertinente ?</td><td>Répond à la question ?</td></tr>
-        <tr><td><strong>Context Precision</strong></td><td>Les bons chunks sont-ils en haut ?</td><td>Le retrieval est-il bon ?</td></tr>
-        <tr><td><strong>Context Recall</strong></td><td>Tous les éléments nécessaires sont-ils trouvés ?</td><td>Rien n'est manqué ?</td></tr>
+        <tr><th>Critère</th><th>Question qu'il pose</th><th>Ce qu'il vérifie</th></tr>
+        <tr><td><strong>Fidélité</strong> <em>(Faithfulness)</em></td><td>La réponse est-elle fidèle aux documents fournis ?</td><td>L'IA n'a pas inventé d'information</td></tr>
+        <tr><td><strong>Pertinence</strong> <em>(Answer Relevancy)</em></td><td>La réponse répond-elle bien à la question ?</td><td>L'IA n'a pas répondu à côté</td></tr>
+        <tr><td><strong>Précision du contexte</strong></td><td>Les meilleurs chunks sont-ils en premier ?</td><td>La recherche classe bien les résultats</td></tr>
+        <tr><td><strong>Rappel du contexte</strong></td><td>A-t-on trouvé tous les documents utiles ?</td><td>Aucune info importante n'a été ratée</td></tr>
     </table>
-    <p class="fragment" style="font-size:0.7em;color:#718096;margin-top:15px;">Framework RAGAS : évalue automatiquement votre pipeline RAG avec un LLM</p>
+    <p class="fragment" style="font-size:0.7em;color:#718096;margin-top:15px;">RAGAS utilise lui-même un LLM pour analyser les réponses — c'est de l'IA qui évalue de l'IA !</p>
 </section>
 
 <section>
     <h2>Multi-modal RAG et Agents</h2>
+    <p style="font-size:0.68em;color:#718096;margin-bottom:10px;">Notre RAG ne gère que du texte. Mais on peut aller plus loin :</p>
     <div class="columns">
         <div class="box">
-            <h3 style="font-size:0.9em;">Multi-modal RAG</h3>
+            <h3 style="font-size:0.9em;">RAG multi-modal</h3>
+            <p style="font-size:0.6em;color:#718096;">Pas que du texte — on peut aussi chercher dans :</p>
             <ul style="font-size:0.65em;">
-                <li>Images : embeddings visuels (CLIP)</li>
-                <li>Audio : transcription + RAG texte</li>
-                <li>Tableaux : parsing structuré</li>
-                <li>Vidéo : extraction de keyframes</li>
+                <li>Des <strong>images</strong> (diagrammes, photos...)</li>
+                <li>De l'<strong>audio</strong> (réunions enregistrées)</li>
+                <li>Des <strong>tableaux</strong> (données Excel)</li>
+                <li>De la <strong>vidéo</strong> (présentations filmées)</li>
             </ul>
         </div>
         <div class="box">
             <h3 style="font-size:0.9em;">Agents + RAG</h3>
+            <p style="font-size:0.6em;color:#718096;">Un "agent" est une IA qui <strong>décide elle-même</strong> quelles actions faire :</p>
             <ul style="font-size:0.65em;">
-                <li>L'agent décide quand chercher</li>
-                <li>Reformule la query si pas de résultat</li>
+                <li>Décide quand chercher dans les docs</li>
+                <li>Reformule la question si rien n'est trouvé</li>
                 <li>Combine plusieurs sources</li>
-                <li>Peut appeler des outils externes</li>
+                <li>Peut naviguer sur le web, envoyer des emails...</li>
             </ul>
         </div>
     </div>
@@ -1469,7 +1528,7 @@ async def query_rag(
         <rect x="550" y="280" width="130" height="45" rx="6" fill="#fed7d7" stroke="#e53e3e" stroke-width="1.5"/>
         <text x="615" y="300" text-anchor="middle" font-size="11" fill="#9b2c2c">Claude</text>
         <text x="615" y="315" text-anchor="middle" font-size="9" fill="#4a5568">Génération</text>
-        <text x="375" y="370" text-anchor="middle" font-size="12" fill="#718096">Le RAG = chercher les bons documents AVANT de répondre</text>
+        <text x="375" y="370" text-anchor="middle" font-size="13" font-weight="bold" fill="#4a5568">Le RAG en une phrase : donner les bons documents à l'IA AVANT qu'elle ne réponde</text>
     </svg>
 </section>
 

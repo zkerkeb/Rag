@@ -1,52 +1,89 @@
-# Enterprise RAG Configuration
-# Override with environment variables prefixed with RAG_
+# =============================================================================
+# FICHIER DE CONFIGURATION PRINCIPAL DU PROJET RAG
+# =============================================================================
+#
+# Ce fichier YAML centralise TOUS les réglages de l'application.
+# Au lieu de coder les valeurs en dur dans le code Python, on les met ici :
+# → plus facile à modifier sans toucher au code
+# → un seul endroit pour tout paramétrer
+#
+# Format YAML : chaque ligne "clé: valeur" définit un paramètre.
+# Les blocs indentés regroupent les paramètres par catégorie.
+# =============================================================================
 
+# --- Serveur web (FastAPI + Uvicorn) -----------------------------------------
+# Ces réglages contrôlent comment le serveur web démarre.
 server:
-  host: "0.0.0.0"
-  port: 8000
-  workers: 1
-  reload: true
+  host: "0.0.0.0"         # Adresse d'écoute. "0.0.0.0" = accepter les connexions de partout
+  port: 8000              # Port d'écoute. L'app sera accessible sur http://localhost:8000
+  workers: 1              # Nombre de processus parallèles (1 suffit pour le dev)
+  reload: true            # Si true, le serveur redémarre automatiquement quand on modifie le code
 
+# --- Modèle de langage (LLM) ------------------------------------------------
+# Le LLM génère les réponses en langage naturel à partir du contexte retrouvé.
+# C'est l'étape "Generate" du RAG.
 llm:
-  provider: "anthropic"
-  model: "claude-sonnet-4-20250514"
-  max_tokens: 4096
-  temperature: 0.1
+  provider: "anthropic"                 # Fournisseur du LLM (ici Anthropic, créateur de Claude)
+  model: "claude-sonnet-4-20250514"     # Modèle spécifique à utiliser
+  max_tokens: 4096                      # Longueur maximale de la réponse (~3000 mots)
+  temperature: 0.1                      # Créativité : 0 = très factuel, 1 = très créatif
+  # Note : la clé API n'est PAS ici (secret !). Elle est dans la variable d'environnement
+  # ANTHROPIC_API_KEY ou dans un fichier .env à la racine du projet.
 
+# --- Modèle d'embeddings ----------------------------------------------------
+# Le modèle d'embedding transforme du texte en vecteurs (listes de nombres).
+# C'est un modèle DIFFÉRENT du LLM : il est petit, rapide, et tourne en local.
 embeddings:
-  model: "all-MiniLM-L6-v2"
-  dimension: 384
+  model: "all-MiniLM-L6-v2"  # Modèle Sentence-Transformers, gratuit et open-source
+  dimension: 384              # Chaque texte sera représenté par 384 nombres
 
+# --- Base de données vectorielle (ChromaDB) ----------------------------------
+# ChromaDB stocke les vecteurs et permet la recherche par similarité.
+# C'est ici que les chunks de documents "vivent" après l'ingestion.
 vector_store:
-  provider: "chromadb"
-  persist_directory: "./data/chroma_db"
-  collection_name: "enterprise_docs"
+  provider: "chromadb"                   # Type de base vectorielle utilisée
+  persist_directory: "./data/chroma_db"  # Dossier où les données sont sauvegardées sur disque
+  collection_name: "enterprise_docs"     # Nom de la collection par défaut (= une "table")
 
+# --- Découpage en chunks (chunking) -----------------------------------------
+# Avant d'être indexés, les documents sont découpés en petits morceaux (chunks).
+# Ces réglages contrôlent COMMENT ce découpage est fait.
 chunking:
-  strategy: "recursive"
-  chunk_size: 512
-  chunk_overlap: 50
-  separators:
-    - "\n\n"
-    - "\n"
-    - ". "
-    - " "
+  strategy: "recursive"   # Stratégie : coupe d'abord aux paragraphes, puis aux lignes, etc.
+  chunk_size: 512         # Taille maximale d'un chunk en caractères
+  chunk_overlap: 50       # Chevauchement entre chunks consécutifs (pour ne pas couper une idée)
+  separators:             # Ordre de priorité pour le découpage :
+    - "\n\n"              #   1. Entre paragraphes (double saut de ligne)
+    - "\n"                #   2. Entre lignes (simple saut de ligne)
+    - ". "                #   3. Entre phrases (point + espace)
+    - " "                 #   4. Entre mots (espace) — dernier recours
 
+# --- Recherche (retrieval) ---------------------------------------------------
+# Quand l'utilisateur pose une question, on cherche les chunks les plus pertinents.
+# Ces réglages contrôlent cette recherche.
 retrieval:
-  top_k: 5
-  score_threshold: 0.3
-  rerank: false
+  top_k: 5                # Nombre maximum de chunks à retourner
+  score_threshold: 0.3    # Score minimum de similarité (0 à 1) pour garder un résultat
+  rerank: false           # Si true, un 2e modèle ré-ordonne les résultats (plus précis mais plus lent)
 
+# --- Authentification --------------------------------------------------------
+# Protège les endpoints de l'API avec des tokens JWT.
+# Désactivé par défaut pour faciliter le développement.
 auth:
-  enabled: false
-  secret_key: "change-me-in-production"
-  algorithm: "HS256"
-  access_token_expire_minutes: 60
+  enabled: false                        # Mettre à true pour activer l'authentification
+  secret_key: "change-me-in-production" # Clé secrète pour signer les tokens (À CHANGER en prod !)
+  algorithm: "HS256"                    # Algorithme de signature du token JWT
+  access_token_expire_minutes: 60       # Durée de validité d'un token (en minutes)
 
+# --- Logs (journalisation) ---------------------------------------------------
+# Les logs enregistrent ce que fait l'application (utile pour déboguer).
 logging:
-  level: "INFO"
-  format: "json"
+  level: "INFO"    # Niveau de détail : DEBUG (très bavard) → INFO → WARNING → ERROR (silencieux)
+  format: "json"   # Format de sortie : "json" (pour les outils) ou "console" (pour les humains)
 
+# --- Monitoring (surveillance) -----------------------------------------------
+# Expose des métriques (nombre de requêtes, temps de réponse...) au format Prometheus.
+# Prometheus est un outil standard pour surveiller des applications en production.
 monitoring:
-  prometheus_enabled: true
-  metrics_path: "/metrics"
+  prometheus_enabled: true    # Active l'exposition des métriques
+  metrics_path: "/metrics"    # URL où les métriques sont accessibles
